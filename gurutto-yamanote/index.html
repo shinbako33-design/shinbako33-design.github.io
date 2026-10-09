@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="山手線30駅を歩いて一周する日のための記録アプリ">
+<meta name="theme-color" content="#F3F6EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F130C" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ぐるっと山手線">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font-size:14px;font-family:system-ui,sans-serif;background:#F3F6EE}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>ぐるっと山手線</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+<style>
+/* Layout: one column, the loop map is the hero and doubles as the progress ring; next-stop card and stop log below */
+:root{
+  --bg:#F3F6EE; --surface:#FFFFFF; --fg:#18210F; --muted:#69735F; --rule:#E1E7D8;
+  --track:#D9E0CF; --line:#86C232; --ink:#3D6B10; --on-line:#18210F; --warn:#B4472C;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-num:"Barlow Semi Condensed","Zen Kaku Gothic New",system-ui,sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F130C; --surface:#171D13; --fg:#E7EEDD; --muted:#919C86; --rule:#263021;
+  --track:#2B3524; --line:#9ACD32; --ink:#B9E36A; --on-line:#0F130C; --warn:#E5785B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F130C; --surface:#171D13; --fg:#E7EEDD; --muted:#919C86; --rule:#263021;
+  --track:#2B3524; --line:#9ACD32; --ink:#B9E36A; --on-line:#0F130C; --warn:#E5785B; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+/* iPhone（375〜430px幅）を基準に、片手・親指で操作できる配置 */
+.wrap{max-width:440px;margin:0 auto;padding-inline:16px;padding-block:10px calc(104px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px}
+button,label,.st{touch-action:manipulation}
+svg,.go,.pause,.add-photo,.trivia{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.actbar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:color-mix(in srgb, var(--bg) 88%, transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--rule);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.actbar .btns{max-width:408px;margin:0 auto}
+.actbar .pause{color:var(--fg)}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:34px;height:34px;flex:none}
+.brand h1{font-size:18px;font-weight:900;margin:0;letter-spacing:.04em;line-height:1.2}
+.brand p{margin:0;font-size:11.5px;color:var(--muted);letter-spacing:.06em}
+.icon-btn{border:1px solid var(--rule);background:var(--surface);border-radius:999px;min-height:40px;padding:0 16px;font-size:14px;font-weight:700}
+
+.map{background:var(--surface);border-radius:var(--r);padding:4px 0 0}
+.map svg{display:block;width:100%;height:auto;max-width:100%}
+.seg{fill:none;stroke:var(--track);stroke-width:9;stroke-linecap:round}
+.seg.done{stroke:var(--line)}
+.seg.walking{stroke:var(--line);stroke-dasharray:2 7;stroke-width:5}
+.st circle.dot{fill:var(--surface);stroke:var(--track);stroke-width:3}
+.st.major circle.dot{stroke-width:4}
+.st.done circle.dot{fill:var(--line);stroke:var(--surface);stroke-width:2.5}
+.st.next circle.dot{stroke:var(--line);stroke-width:3.5}
+.st .pulse{fill:none;stroke:var(--line);stroke-width:2;opacity:0}
+.st.next .pulse{opacity:.55}
+.st .start-ring{fill:none;stroke:var(--fg);stroke-width:2.4;opacity:0}
+.st.start .start-ring{opacity:1}
+.st.start > text{opacity:0}
+.start-flag rect{fill:var(--fg)}
+.start-flag .sf-name{font-family:var(--f-body);font-size:13px;font-weight:900;fill:var(--bg)}
+.start-flag .sf-cap{font-family:var(--f-num);font-size:9px;font-weight:700;fill:var(--ink);letter-spacing:.14em}
+.start-flag{pointer-events:none}
+.st text{font-family:var(--f-body);font-size:11px;font-weight:700;fill:var(--muted)}
+.st.major text{font-size:13px;font-weight:900;fill:var(--fg)}
+.st.done text{fill:var(--ink)}
+.st.next text{fill:var(--fg)}
+.st .hit{fill:transparent;cursor:pointer}
+.st.sel circle.dot{stroke:var(--fg)}
+.c-label{font-family:var(--f-body);font-size:10px;font-weight:700;fill:var(--muted);letter-spacing:.12em}
+.c-big{font-family:var(--f-num);font-weight:700;font-size:64px;fill:var(--ink)}
+.c-name{font-family:var(--f-body)!important;font-weight:900!important;letter-spacing:.04em;font-size:44px}
+.c-time{font-family:var(--f-num);font-weight:700;font-size:40px;fill:var(--fg);font-variant-numeric:tabular-nums}
+.c-pct2{font-family:var(--f-num);font-weight:700;font-size:30px;fill:var(--ink)}
+.c-pct{font-family:var(--f-num);font-weight:700;font-size:17px;fill:var(--ink)}
+.c-cnt{font-family:var(--f-num);font-weight:600;font-size:16px;fill:var(--fg)}
+.c-of{font-family:var(--f-num);font-weight:600;font-size:20px;fill:var(--muted)}
+.c-sub{font-family:var(--f-num);font-weight:600;font-size:22px;fill:var(--fg)}
+.c-unit{font-family:var(--f-body);font-weight:700;font-size:9.5px;fill:var(--muted)}
+.c-rest{font-family:var(--f-body);font-weight:900;font-size:11px;fill:var(--warn);letter-spacing:.1em}
+.c-tag{font-family:var(--f-body);font-weight:700;font-size:10px;fill:var(--ink);letter-spacing:.06em}
+
+.next{background:var(--surface);color:var(--fg);border-radius:var(--r);padding:16px 18px 18px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--rule)}
+.next .eyebrow{font-size:11.5px;letter-spacing:.12em;font-weight:700;color:var(--muted)}
+.next .row{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.next .name{font-size:32px;font-weight:900;line-height:1.1;letter-spacing:.03em}
+.next .name small{display:block;font-family:var(--f-num);font-size:13px;font-weight:600;letter-spacing:.08em;color:var(--muted);margin-top:4px}
+.leg{display:flex;flex-direction:column;gap:2px;min-width:0}
+.leg .from{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--muted)}
+.leg .from::after{content:"";flex:none;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--line);opacity:1}
+.leg .to{font-size:32px;font-weight:900;line-height:1.1;letter-spacing:.03em;color:var(--fg)}
+.leg .to small{display:block;font-family:var(--f-num);font-size:13px;font-weight:600;letter-spacing:.08em;color:var(--muted);margin-top:4px}
+.to-map{background:none;border:0;padding:0;min-height:44px;color:var(--muted);font-size:12.5px;font-weight:700}
+.center-hit{fill:transparent;cursor:pointer}
+svg [tabindex]:focus{outline:none}
+svg [tabindex]:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.c-hint{font-family:var(--f-body);font-size:9.5px;font-weight:700;fill:var(--muted);letter-spacing:.06em}
+#nextBox{scroll-margin-top:12px}
+.svg-cele .seg{animation:glow .7s ease-in-out 4 alternate}
+@keyframes glow{to{stroke-width:14;stroke:var(--ink)}}
+.cele{position:fixed;inset:0;z-index:35;display:flex;align-items:center;justify-content:center;padding:24px;background:color-mix(in srgb, var(--bg) 70%, transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);animation:fadeIn .3s ease-out}
+.cele .box{text-align:center;display:flex;flex-direction:column;gap:6px;animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
+.cele .s1{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.1em}
+.cele .s2{font-size:56px;font-weight:900;line-height:1.1;letter-spacing:.04em;color:var(--fg)}
+.cele .s3{font-family:var(--f-num);font-size:40px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.cele .s4{font-size:12px;color:var(--muted);margin-top:10px}
+@keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:none;opacity:1}}
+@keyframes fadeIn{from{opacity:0}}
+.next .meta{text-align:right;font-size:12px;color:var(--muted)}
+.next .meta b{display:block;font-family:var(--f-num);font-size:22px;font-weight:700;color:var(--ink)}
+.go{width:100%;border:0;border-radius:14px;background:var(--line);color:var(--on-line);font-size:18px;font-weight:900;min-height:56px;padding:12px;letter-spacing:.06em;transition:transform .12s}
+.go:active{transform:scale(.98)}
+.btns{display:grid;grid-template-columns:1fr auto;gap:8px}
+.pause{border:1.5px solid currentColor;background:none;color:inherit;border-radius:14px;min-width:76px;padding:0 14px;font-weight:900;font-size:14px;letter-spacing:.04em;opacity:.85}
+.pause.on{background:var(--warn);border-color:var(--warn);color:#fff;opacity:1}
+.rest{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--warn);color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;font-size:13.5px}
+.rest b{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:18px}
+.next .sub-actions{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}
+.link{background:none;border:0;padding:0;min-height:44px;color:inherit;opacity:.7;text-decoration:underline;text-underline-offset:3px}
+
+.mapbar{padding:4px 12px 12px;display:flex;flex-direction:column;gap:6px}
+.mapbar .lbls{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em}
+.mapbar .lbls b{font-family:var(--f-num);color:var(--ink);font-size:13px}
+.bar{display:grid;grid-template-columns:repeat(30,1fr);gap:2px;height:14px}
+.bar i{background:var(--track);border-radius:2px;transition:background-color .4s}
+.bar i.on{background:var(--line)}
+.bar i.cur{background:var(--track);box-shadow:inset 0 0 0 2px var(--line)}
+.bar i:first-child{border-radius:7px 2px 2px 7px}.bar i:last-child{border-radius:2px 7px 7px 2px}
+.trivia{display:flex;gap:10px;align-items:flex-start;background:var(--bg);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.6;font-weight:500;border:0;color:var(--fg);text-align:left;width:100%}
+.trivia .q{flex:none;font-family:var(--f-num);font-weight:700;font-size:11px;letter-spacing:.1em;background:var(--ink);color:var(--surface);border-radius:4px;padding:1px 6px;margin-top:2px}
+.trivia small{display:block;opacity:.55;font-size:11px;margin-top:2px}
+.stats{display:grid;grid-template-columns:1fr;gap:8px}
+.stats .stat{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.stat{background:var(--surface);border-radius:12px;padding:10px 12px}
+.stat span{display:block;font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em}
+.stat b{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:22px;font-weight:700}
+.stat b small{font-size:12px;color:var(--muted);margin-left:2px}
+
+.panel{background:var(--surface);border-radius:var(--r);padding:16px}
+.panel h2{font-size:14px;margin:0 0 10px;letter-spacing:.06em}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-size:12px;color:var(--muted);font-weight:700}
+select{font:inherit;font-size:16px;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--rule);background:var(--bg);color:var(--fg)}
+.seg-ctl{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:10px;padding:3px;border:1px solid var(--rule)}
+.seg-ctl button{border:0;background:none;border-radius:8px;padding:9px 6px;font-size:13.5px;font-weight:700;color:var(--muted)}
+.seg-ctl button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgb(0 0 0 / .12)}
+.set{padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.set-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.set-row select{min-width:0}
+.set-row .seg-ctl button{padding:8px 12px;min-height:38px}
+.bk-row{display:flex;flex-wrap:wrap;gap:4px 16px}
+.bk-row .link{color:var(--ink);font-size:12.5px;min-height:36px;display:inline-flex;align-items:center;cursor:pointer;opacity:1}
+.set-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.set-foot .note{margin:0}
+#resetBox{margin-left:auto}
+.danger{border:0;color:var(--warn);background:none;padding:0;min-height:36px;font-weight:700;font-size:12.5px;text-decoration:underline;text-underline-offset:3px}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.confirm .yes{background:var(--warn);color:var(--surface);border:0;border-radius:8px;padding:6px 12px;font-weight:700}
+.confirm .no{background:none;border:1px solid var(--rule);border-radius:8px;padding:6px 12px}
+.note{font-size:12px;color:var(--muted);margin:6px 0 0}
+
+.log{list-style:none;margin:0;padding:0}
+.log li{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;min-height:44px;position:relative}
+.log li::before{content:"";position:absolute;left:10px;top:0;bottom:0;width:3px;background:var(--track)}
+.log li.done::before{background:var(--line)}
+.log li:first-child::before{top:50%}
+.log li:last-child::before{bottom:50%}
+.log .pin{width:13px;height:13px;border-radius:50%;background:var(--surface);border:3px solid var(--track);justify-self:center;position:relative;z-index:1}
+.log li.done .pin{background:var(--line);border-color:var(--line)}
+.log li.nextup .pin{border-color:var(--line)}
+.log .nm{min-width:0;font-weight:700;font-size:14.5px;line-height:1.3}
+.log .nm small{font-family:var(--f-num);font-weight:600;color:var(--muted);font-size:11.5px;letter-spacing:.04em;margin-left:6px}
+.log li:not(.done):not(.nextup) .nm{color:var(--muted);font-weight:500}
+.log .tag{display:inline-block;font-size:10px;font-weight:700;background:var(--fg);color:var(--bg);border-radius:4px;padding:0 5px;margin-right:6px;vertical-align:2px}
+.log .rt{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:13px;line-height:1.25}
+.log .rt small{display:block;color:var(--muted);font-size:11px}
+.log .rest-pill.stay{color:var(--muted);border-color:var(--rule)}
+.log .rest-pill{display:inline-block;font-family:var(--f-body);font-size:10.5px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:0 6px;margin-top:2px}
+
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;pointer-events:none}
+.sheet .card{pointer-events:auto;width:100%;max-width:536px;background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:16px 18px;box-shadow:0 10px 40px rgb(0 0 0 / .22);display:flex;flex-direction:column;gap:10px;animation:up .2s ease-out}
+@keyframes up{from{transform:translateY(16px);opacity:0}}
+.sheet .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.sheet h3{margin:0;font-size:24px;font-weight:900;line-height:1.15}
+.sheet h3 small{display:block;font-family:var(--f-num);font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.06em}
+.sheet .x{border:0;background:var(--bg);border-radius:999px;width:32px;height:32px;font-size:16px}
+.sheet .info{font-size:13.5px;color:var(--muted)}
+.sheet .info b{color:var(--fg)}
+
+.goal{background:var(--line);color:var(--on-line);border-radius:var(--r);padding:20px 18px;display:flex;flex-direction:column;gap:6px}
+.goal .big{font-size:30px;font-weight:900;letter-spacing:.04em;line-height:1.2}
+.goal p{margin:0;font-size:14px;font-weight:700}
+.goal{gap:4px!important;padding:20px 18px 14px!important}
+.goal .g-eye{font-size:12px;font-weight:700;letter-spacing:.06em;opacity:.75}
+.goal .g-time{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:52px;font-weight:700;line-height:1.05;margin-top:4px}
+.goal .g-sub{font-size:12.5px;font-weight:700;opacity:.8}
+.goal .card-btn{margin-top:14px}
+.g-todo{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1.5px solid currentColor;background:none;color:inherit;border-radius:12px;min-height:46px;padding:0 14px;font-size:12.5px;margin-top:8px;text-align:left}
+.g-todo b{font-weight:700;min-width:0}
+.g-todo span{flex:none;font-size:12px;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.g-undo{align-self:flex-start;color:inherit;opacity:.7;font-size:12px;margin-top:2px}
+.card-btn{border:0;border-radius:14px;background:var(--fg);color:var(--bg);font-size:16px;font-weight:900;min-height:52px;margin-top:10px;letter-spacing:.04em}
+.next .meta .eta{display:block;font-size:11.5px;margin-top:2px}
+.next .meta .eta b{display:inline;font-size:15px;color:var(--fg)}
+.viewer .hint{color:rgb(255 255 255 / .7);font-size:12px;text-align:center;width:100%}
+.viewer .vsave{background:#9ACD32;border-color:#9ACD32;color:#0F130C}
+.phblock{display:flex;flex-direction:column;gap:6px}
+.phlabel{font-size:12px;font-weight:700;color:var(--muted)}
+.rv{display:flex;flex-direction:column;gap:14px}
+.rv h3{margin:0 0 6px;font-size:12.5px;color:var(--muted);letter-spacing:.06em}
+.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rank li{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center}
+.rank .no{font-family:var(--f-num);font-weight:700;font-size:16px;color:var(--ink);text-align:center}
+.rank .nm{min-width:0;font-weight:700;font-size:14px;line-height:1.3}
+.rank .nm small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
+.rank .tr{display:block;height:6px;border-radius:3px;background:var(--track);margin-top:4px;overflow:hidden}
+.rank .tr i{display:block;height:100%;background:var(--line);border-radius:3px}
+.rank.fast .tr i{background:var(--ink)}
+.rank .v{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:700;font-size:18px}
+.rv .facts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rv .fact{background:var(--bg);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--muted);font-weight:700;min-width:0}
+.rv .fact b{display:block;color:var(--fg);font-size:14px;line-height:1.35}
+.rv .fact.wide{grid-column:1/-1}
+.rv .fact b.big{font-family:var(--f-num);font-size:26px;font-variant-numeric:tabular-nums}
+.stepbox{background:var(--bg);border-radius:12px;padding:10px 12px}
+.stepbox>summary{font-weight:900;font-size:14px;cursor:pointer;min-height:36px;display:flex;align-items:center}
+.steps-how{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:12px;font-size:13.5px}
+.steps-how li b{display:block}
+.steps-how li span{display:block;color:var(--muted);font-size:12px}
+.steps-how textarea,.stout{width:100%;font:inherit;font-size:16px;border:1px solid var(--rule);border-radius:10px;padding:8px 10px;background:var(--surface);color:var(--fg);margin-top:6px;resize:vertical}
+.sbtn{margin-top:6px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;min-height:42px;padding:0 16px;font:inherit;font-size:14px;font-weight:700}
+.sbtn.main{background:var(--line);color:var(--on-line);border-color:var(--line);width:100%}
+.howto{margin-top:12px;border-top:1px solid var(--rule);padding-top:8px}
+.howto>summary{font-size:13px;font-weight:700;color:var(--ink);cursor:pointer;min-height:36px;display:flex;align-items:center}
+.howto .sc{padding-left:20px;font-size:13px;line-height:1.7;display:flex;flex-direction:column;gap:6px}
+.howto .sc ol{padding-left:18px;margin:6px 0 0;display:flex;flex-direction:column;gap:6px}
+.howto code{font-family:var(--f-num);background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:0 4px}
+.note2{font-size:12.5px;color:var(--muted);margin:6px 0;line-height:1.7}
+.rv .say{margin:0;font-size:13.5px;font-weight:700;line-height:1.6}
+.photo1{padding:0;border:0;border-radius:10px;overflow:hidden;aspect-ratio:4/3;width:100%;max-width:100%;max-height:40vh;background:var(--track)}
+.photo1 img{width:100%;height:100%;object-fit:cover;display:block}
+.add-photo{display:flex;align-items:center;justify-content:center;gap:6px;border:1.5px dashed var(--line);color:var(--ink);border-radius:12px;padding:11px;font-weight:700;font-size:14px;cursor:pointer;background:none}
+.add-photo.inv{padding:9px;font-size:13px}
+.ph-count{display:inline-block;font-family:var(--f-body);font-size:10.5px;font-weight:700;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-top:2px;margin-left:4px}
+.log li.done{cursor:pointer}
+.viewer{position:fixed;inset:0;z-index:40;background:rgb(0 0 0 / .92);display:flex;flex-direction:column;padding:calc(12px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.viewer .vbar{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#fff;font-size:14px;font-weight:700}
+.viewer .vimg{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding-block:12px}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+.viewer button{border:1px solid rgb(255 255 255 / .4);background:none;color:#fff;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px}
+.viewer .vdel{border-color:#E5785B;color:#F2A08A}
+.viewer .vrow{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;color:#fff;font-size:13px;align-items:center}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13px;font-weight:700;z-index:50;max-width:calc(100% - 32px)}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:30}
+
+:root{--m5:#3E8E1E;--m4:#86C232;--m3:#B9C3AE;--m2:#E0A23A;--m1:#D2603C;--mh:#C9A227}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--m5:#7CC43A;--m4:#A9D45A;--m3:#6F7A66;--m2:#E3A94A;--m1:#E5785B;--mh:#D8B444}}
+:root[data-theme="dark"]{--m5:#7CC43A;--m4:#A9D45A;--m3:#6F7A66;--m2:#E3A94A;--m1:#E5785B;--mh:#D8B444}
+.hdr-r{display:flex;gap:6px}
+.icon-btn[aria-pressed="false"]{opacity:.55}
+.testbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--mh);color:#1B1A0C;border-radius:12px;padding:6px 10px;font-size:12.5px;font-weight:700}
+.testbar b{font-family:var(--f-num);font-size:15px;font-variant-numeric:tabular-nums}
+.testbar button{border:0;border-radius:8px;background:rgb(255 255 255 / .7);color:#1B1A0C;font-weight:700;font-size:13px;min-height:34px;padding:0 10px}
+.testbar .sp{flex:1}
+.tm{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--muted);min-height:36px}
+.tm input{width:18px;height:18px;accent-color:var(--line)}
+.mood{display:flex;flex-direction:column;gap:8px;background:var(--bg);border-radius:10px;padding:10px 12px}
+.mood .q2{font-size:13.5px;font-weight:700;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.mbtn{border:1.5px solid transparent;border-radius:10px;min-height:44px;padding:4px 2px;font-size:12px;font-weight:700;line-height:1.2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:color-mix(in srgb, currentColor 8%, transparent);color:inherit;touch-action:manipulation}
+.mbtn i{width:10px;height:10px;border-radius:50%;display:block}
+.mbtn.sel{border-color:currentColor;background:color-mix(in srgb, currentColor 18%, transparent)}
+.sheet .mgrid .mbtn{color:var(--fg)}
+.mpill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border:1px solid var(--rule);border-radius:999px;padding:0 7px;margin-top:2px;margin-left:4px;color:var(--fg)}
+.mpill i{width:7px;height:7px;border-radius:50%}
+.mstrip{display:grid;grid-template-columns:repeat(31,1fr);gap:2px;height:22px}
+.mstrip i{border-radius:3px;background:var(--track)}
+.mlegend{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);font-weight:700;margin-top:4px}
+.intro{position:fixed;inset:0;z-index:45;background:var(--bg);display:flex;flex-direction:column;padding:calc(20px + env(safe-area-inset-top,0px)) 24px calc(20px + env(safe-area-inset-bottom,0px))}
+.intro .skip{align-self:flex-end;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;font-weight:700;min-height:40px}
+.intro .slide{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;max-width:400px;margin:0 auto;width:100%;animation:fadeIn .25s ease-out}
+.intro .art{height:200px;display:flex;align-items:center;justify-content:center}
+.intro h2{margin:0;font-size:26px;font-weight:900;line-height:1.3;text-wrap:balance}
+.intro p{margin:0;font-size:15px;line-height:1.75;color:var(--muted)}
+.intro .dots{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
+.intro .dots i{width:7px;height:7px;border-radius:50%;background:var(--track)}
+.intro .dots i.on{background:var(--ink);width:20px;border-radius:4px}
+.intro .nav{max-width:400px;margin:0 auto;width:100%}
+.mini{display:flex;flex-direction:column;gap:8px;width:250px}
+.mini .chip{border-radius:12px;padding:10px 14px;font-weight:900;font-size:15px;text-align:center}
+.mini .g{background:var(--line);color:var(--on-line)}
+.mini .s{background:var(--surface);border:1px solid var(--rule);color:var(--fg);font-weight:700;font-size:13.5px}
+.mini .arw{text-align:center;color:var(--muted);font-size:14px;line-height:1}
+.mini .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (prefers-reduced-motion:reduce){.intro .slide{animation:none}}
+.todo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.todo-i{border:1.5px dashed var(--rule);background:var(--bg);color:var(--fg);border-radius:10px;min-height:52px;padding:6px 12px;text-align:left;display:flex;flex-direction:column;justify-content:center}
+.todo-i span{font-size:11px;color:var(--muted);font-weight:700}
+.todo-i b{font-size:15px}
+.todo-i.ok{border-style:solid;border-color:var(--line);background:none}
+.todo-i.ok b{color:var(--ink)}
+.arrive{position:fixed;inset:0;z-index:25;background:rgb(0 0 0 / .45);display:flex;align-items:flex-end;justify-content:center;padding:calc(12px + env(safe-area-inset-top,0px)) 0 0}
+.arr-card{width:100%;max-width:440px;max-height:100%;overflow-y:auto;background:var(--surface);border-radius:20px 20px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:16px;animation:up .22s ease-out;-webkit-overflow-scrolling:touch}
+.arr-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.arr-eye{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.06em}
+.arr-name{font-size:28px;font-weight:900;line-height:1.2}
+.arr-step{display:flex;flex-direction:column;gap:8px}
+.arr-h{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900}
+.arr-h .n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--fg);color:var(--bg);font-family:var(--f-num);font-size:13px}
+.arrive .mbtn{color:var(--fg)}
+.arrive .x{border:0;background:var(--bg);border-radius:999px;width:36px;height:36px;font-size:16px;color:var(--fg)}
+.arr-foot{display:flex;flex-direction:column;gap:4px;position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom,0px));background:var(--surface);padding-block:8px 0}
+.arr-later{color:var(--muted);opacity:1;align-self:center}
+.arr-links{display:flex;justify-content:space-between;gap:8px}
+.go:disabled{opacity:.45;transform:none}
+@media (prefers-reduced-motion:reduce){.arr-card,.sheet .card,.cele,.cele .box,.svg-cele .seg{animation:none}.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 34 34" aria-hidden="true"><rect x="4" y="4" width="26" height="26" rx="12" fill="none" stroke="var(--line)" stroke-width="4.5"/><circle cx="29" cy="17" r="4" fill="var(--fg)"/></svg>
+      <h1>ぐるっと山手線</h1>
+    </div>
+    <div class="hdr-r"><button class="icon-btn" id="btnSettings" aria-expanded="false">設定</button></div>
+  </header>
+  <div class="testbar" id="testbar" hidden><span>テスト中 時計 +<b id="tOff">0:00</b></span><span class="sp"></span><button data-add="5">+5分</button><button data-add="15">+15分</button><button data-add="60">+1時間</button><button id="tGoal">ゴールまで</button></div>
+
+  <section class="panel set" id="settings" hidden>
+    <div class="set-row">
+      <select id="selStart" aria-label="出発駅"></select>
+      <div class="seg-ctl" role="group" aria-label="まわる向き">
+        <button id="dirInner" data-dir="inner">内回り</button>
+        <button id="dirOuter" data-dir="outer">外回り</button>
+      </div>
+    </div>
+    <label class="tm"><input type="checkbox" id="tmChk"> テストモード（時計を早送りして試せる）</label>
+    <div class="bk-row"><button class="link" id="showIntro">使い方を見る</button><button class="link" id="bkOut">記録を書き出す</button><label class="link" for="bkIn">記録を読み込む</label></div>
+    <input type="file" id="bkIn" accept=".json,application/json" hidden>
+    <div id="bkConfirm"></div>
+    <div class="set-foot"><span class="note" id="lockNote" hidden>歩いている間は変更できません</span><span id="resetBox"></span></div>
+  </section>
+
+  <section class="map" aria-label="山手線路線図">
+    <svg id="svg" viewBox="-6 -2 352 488" role="img" aria-label="山手線の路線図とおさんぽの様子"></svg>
+    <div class="mapbar">
+      <div class="lbls"><span id="barFrom">START</span><span><b id="barCnt">0</b> / 30駅</span><span>GOAL</span></div>
+      <div class="bar" id="bar"></div>
+    </div>
+  </section>
+
+  <section id="nextBox"></section>
+
+  <section class="panel" id="review" hidden>
+    <h2>一周のふりかえり</h2>
+    <div class="rv" id="rv"></div>
+  </section>
+
+  <section class="stats" id="stats"></section>
+
+  <section class="panel">
+    <h2>きろく</h2>
+    <ol class="log" id="log"></ol>
+  </section>
+</div>
+
+<div class="actbar" id="actbar" hidden></div>
+<div class="sheet" id="sheet" hidden></div>
+<div class="arrive" id="arrive" hidden></div>
+<div class="intro" id="intro" hidden></div>
+<canvas id="fx" hidden></canvas>
+<div class="cele" id="cele" hidden></div>
+<input type="file" id="photoIn" accept="image/*" hidden>
+<div class="viewer" id="viewer" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// 駅データ（内回り順）。座標は路線図の形を元にした模式図。
+const ST = [
+ ["東京","Tokyo",1,255,231,"R"],["神田","Kanda",0,267,196,"R"],["秋葉原","Akihabara",0,274,166,"R"],
+ ["御徒町","Okachimachi",0,280,138,"R"],["上野","Ueno",1,284,112,"R"],["鶯谷","Uguisudani",0,291,86,"R"],
+ ["日暮里","Nippori",0,268,64,"L"],["西日暮里","Nishi-Nippori",0,256,47,"TR"],["田端","Tabata",0,236,29,"T"],
+ ["駒込","Komagome",0,204,30,"T"],["巣鴨","Sugamo",0,178,42,"B"],["大塚","Otsuka",0,144,47,"T"],
+ ["池袋","Ikebukuro",1,97,56,"TL"],["目白","Mejiro",0,82,90,"L"],["高田馬場","Takadanobaba",0,73,118,"L"],
+ ["新大久保","Shin-Okubo",0,64,158,"L"],["新宿","Shinjuku",1,62,198,"L"],["代々木","Yoyogi",0,68,225,"L"],
+ ["原宿","Harajuku",0,70,265,"L"],["渋谷","Shibuya",1,66,306,"L"],["恵比寿","Ebisu",0,88,352,"L"],
+ ["目黒","Meguro",0,106,398,"L"],["五反田","Gotanda",0,128,428,"L"],["大崎","Osaki",0,150,458,"L"],
+ ["品川","Shinagawa",1,174,424,"R"],["高輪ゲートウェイ","Takanawa Gateway",0,182,388,"R"],["田町","Tamachi",0,201,358,"R"],
+ ["浜松町","Hamamatsucho",0,226,322,"R"],["新橋","Shimbashi",0,232,286,"R"],["有楽町","Yurakucho",0,245,256,"R"]
+];
+const N = 30, KEY = "yamanote-walk-v1"; // 保存キーは改名前のまま（記録を引き継ぐため）
+
+let S = {start:0, dir:"inner", checks:[], pauses:[]};
+try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && Array.isArray(s.checks)) S = Object.assign({pauses:[]}, s); }catch(e){}
+// テストモード中は時計を早送りできる（S.tOff ミリ秒ぶん先の時刻を「いま」とみなす）
+const now = () => Date.now() + (S.test ? (S.tOff||0) : 0);
+if(!S.mood) S.mood = {};
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} };
+
+const route = () => Array.from({length:N+1}, (_,k) => S.dir==="inner" ? (S.start+k)%N : (S.start-k+N)%N);
+const segIdx = k => { const r = route(); return S.dir==="inner" ? r[k] : r[k+1]; }; // segment between stop k and k+1
+// 経過時間は休憩込み。休憩は区間ごとに記録して振り返りに使う
+const paused = () => { const p=S.pauses[S.pauses.length-1]; return !!(p && p.e==null); };
+const restBefore = t => S.pauses.reduce((a,p)=>a+Math.max(0,Math.min(p.e??t,t)-Math.min(p.s,t)),0);
+const elapsed = t => S.checks.length ? t - S.checks[0] : 0;
+const restIn = (a,b) => S.pauses.reduce((x,p)=>x+Math.max(0,Math.min(p.e??now(),b)-Math.max(p.s,a)),0);
+const nowT = () => finished() ? S.checks[N] : now();
+const curRest = () => { const p=S.pauses[S.pauses.length-1]; return p && p.e==null ? now()-p.s : 0; };
+const fmtT = ts => { const d=new Date(ts); return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0"); };
+const fmtDur = ms => { const s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60);
+  return h+":"+String(m).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); };
+// ゴール予想時刻：これまでの1駅あたりの平均（休憩込み）で残りの駅数を歩いた場合
+const etaGoal = () => { const n=S.checks.length; if(n<3 || finished()) return null;
+  const last=S.checks[n-1], avg=(last-S.checks[0])/(n-1); return last + avg*(N-(n-1)); };
+// 歩数（ショートカットで取り込んだ区間ごとの歩数。S.steps[k] = k番目の到着から次の到着まで）
+const stepsTotal = () => Array.isArray(S.steps) && S.steps.some(v=>v!=null) ? S.steps.reduce((a,v)=>a+(v||0),0) : null;
+const fmtNum = v => Number(v).toLocaleString("ja-JP");
+const fmtStamp = ts => { const d=new Date(ts), z=x=>String(x).padStart(2,"0"); return `${d.getFullYear()}/${z(d.getMonth()+1)}/${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; };
+const fmtMin = ms => { const m=Math.round(ms/60000); return m>=60 ? Math.floor(m/60)+"時間"+(m%60)+"分" : m+"分"; };
+const started = () => S.checks.length>0, finished = () => S.checks.length===N+1;
+// 駅に着いてから「出発」を押すまでは駅に滞在中（タイマーは次の区間に進まない）
+if(!S.deps){ S.deps={}; S.checks.forEach((t,k)=>{ if(k<N) S.deps[k]=t; }); if(S.checks.length && S.checks.length<=N) delete S.deps[S.checks.length-1]; if(S.checks.length) S.deps[0]=S.checks[0]; }
+const atStation = () => { const n=S.checks.length; return n>=1 && !finished() && S.deps[n-1]==null; };
+const depOf = k => S.deps[k] ?? S.checks[k];
+const stayAt = k => { const a=S.checks[k]; if(a==null) return 0; const d = S.deps[k] ?? (k===S.checks.length-1 && atStation() ? now() : a); return Math.max(0,d-a); };
+const totalRest = t => { let x=restBefore(t); for(let k=1;k<S.checks.length && k<N;k++) x+=stayAt(k); return x; };
+
+// ---------- 地図 ----------
+const svg = document.getElementById("svg"), NS="http://www.w3.org/2000/svg";
+const el = (t,a={},p=svg) => { const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); p.appendChild(e); return e; };
+// 駅の位置（実際の形に近い模式図）
+let POS=[], SIDE=[], GEOM=[], CXC=160, centerReady=false;
+const LBL = {R:[12,4,"start"],L:[-12,4,"end"],T:[0,-11,"middle"],B:[0,19,"middle"],TL:[-9,-9,"end"],TR:[9,-8,"start"],BR:[9,15,"start"],BL:[-9,15,"end"]};
+function computeLayout(){
+  POS = ST.map(s=>[s[3],s[4]]); SIDE = ST.map(s=>s[5]); CXC = 160;
+  GEOM = POS.map((_,i)=>{ const p0=POS[(i-1+N)%N], p1=POS[i], p2=POS[(i+1)%N], p3=POS[(i+2)%N];
+    return [p1,[p1[0]+(p2[0]-p0[0])/6, p1[1]+(p2[1]-p0[1])/6],[p2[0]-(p3[0]-p1[0])/6, p2[1]-(p3[1]-p1[1])/6],p2].map(q=>q.map(v=>+v.toFixed(2))); });
+}
+const gSeg = el("g"), gCenter = el("g"), gSt = el("g");
+const segEls = Array.from({length:N},()=>el("path",{class:"seg"},gSeg));
+const stEls = ST.map((s,i)=>{
+  const g = el("g",{class:"st"+(s[2]?" major":""),tabindex:"0",role:"button","aria-label":s[0]},gSt);
+  el("circle",{class:"pulse",r:7},g);
+  el("circle",{class:"start-ring",r:s[2]?11.5:10},g);
+  el("circle",{class:"dot",r:s[2]?6.5:5},g);
+  const t = el("text",{},g); t.textContent=s[0];
+  el("circle",{class:"hit",r:14},g);
+  g.addEventListener("click",()=>openSheet(i));
+  g.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();openSheet(i);} });
+  return g;
+});
+function applyLayout(){
+  computeLayout();
+  GEOM.forEach((g,i)=>segEls[i].setAttribute("d",`M${g[0]}C${g[1]} ${g[2]} ${g[3]}`));
+  stEls.forEach((g,i)=>{ const [x,y]=POS[i];
+    g.querySelectorAll("circle").forEach(c=>{ c.setAttribute("cx",x); c.setAttribute("cy",y); });
+    const o=LBL[SIDE[i]], t=g.querySelector("text"); t.setAttribute("x",x+o[0]); t.setAttribute("y",y+o[1]); t.setAttribute("text-anchor",o[2]); });
+  if(centerReady){ [cTag,cBig,cCnt,cTl,cTime,cRest].forEach(e=>e.setAttribute("x",CXC)); hitC.setAttribute("x",CXC-70); hitT.setAttribute("x",CXC-80); }
+}
+applyLayout();
+// 出発駅の目印（駅名を反転ラベルにして START を添える）
+const gFlag = el("g",{class:"start-flag"});
+const fRect = el("rect",{rx:6},gFlag);
+const fName = el("text",{class:"sf-name"},gFlag);
+const fCap = el("text",{class:"sf-cap"},gFlag); fCap.textContent="START";
+function placeFlag(){
+  const s = ST[S.start], t = stEls[S.start].querySelector("text");
+  const x=+t.getAttribute("x"), y=+t.getAttribute("y"), a=t.getAttribute("text-anchor");
+  fName.textContent = s[0];
+  fName.setAttribute("x",x+(a==="start"?5:a==="end"?-5:0)); fName.setAttribute("y",y+1); fName.setAttribute("text-anchor",a);
+  let b; try{ b=fName.getBBox(); }catch(e){ return; }
+  if(!b.width) return;
+  fRect.setAttribute("x",b.x-5); fRect.setAttribute("y",b.y-2.5); fRect.setAttribute("width",b.width+10); fRect.setAttribute("height",b.height+5);
+  fCap.setAttribute("x", a==="end" ? b.x+b.width+5 : a==="middle" ? b.x+b.width/2 : b.x-5);
+  fCap.setAttribute("text-anchor", a==="end"?"end":a==="middle"?"middle":"start");
+  fCap.setAttribute("y", b.y-6);
+}
+
+// 中央の「一周のうち何%歩いたか」表示
+const cx=160;
+const cTag = el("text",{x:cx,y:150,"text-anchor":"middle",class:"c-tag"},gCenter);
+const cTl = el("text",{x:cx,y:184,"text-anchor":"middle",class:"c-label"},gCenter); cTl.textContent="スタートから ⇄";
+const cTime = el("text",{x:cx,y:228,"text-anchor":"middle",class:"c-time",lengthAdjust:"spacingAndGlyphs"},gCenter);
+// 時刻の幅を固定（フォントや画面幅が変わっても左右の路線や START ラベルにかからない）
+// 中央の文字が路線にかからないよう、幅が収まるまで文字を小さくする（内側の安全な幅＝136）
+const SAFE_W = 136;
+function fitW(e, maxW=SAFE_W){
+  if(!e.textContent) return;
+  if(e.dataset.fitFor===e.textContent+"|"+(e.getAttribute("class")||"")) return; // 同じ文字なら測り直さない
+  e.style.fontSize=""; let w=0; try{ w=e.getComputedTextLength(); }catch(x){}
+  if(w>maxW){ const base=parseFloat(getComputedStyle(e).fontSize)||16; e.style.fontSize=(base*maxW/w).toFixed(1)+"px"; }
+  e.dataset.fitFor=e.textContent+"|"+(e.getAttribute("class")||"");
+}
+const fitTime = () => { const L=cTime.textContent.length; if(L>=7 && !cTime.classList.contains("c-name")) cTime.setAttribute("textLength", L>=8 ? 136 : 124); else cTime.removeAttribute("textLength"); };
+const cBig = el("text",{x:cx,y:274,"text-anchor":"middle"},gCenter);
+const cLbl = el("tspan",{class:"c-label",dx:"0"},cBig); cLbl.textContent="一周のうち ";
+const cBigN = el("tspan",{class:"c-pct2"},cBig), cBigP = el("tspan",{class:"c-pct",dx:"1"},cBig); cBigP.textContent="%";
+const cCnt = el("text",{x:cx,y:298,"text-anchor":"middle",class:"c-cnt"},gCenter);
+const cRest = el("text",{x:cx,y:326,"text-anchor":"middle",class:"c-rest"},gCenter);
+// 中央のどこをタップしても駅カードへ移動
+const hitC = el("rect",{x:cx-70,y:132,width:140,height:232,rx:20,class:"center-hit",tabindex:"0",role:"button","aria-label":"駅カードを表示"},gCenter);
+const toCard = ()=>document.getElementById("nextBox").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
+hitC.addEventListener("click",toCard);
+// 経過時間をタップ：スタートから ⇄ 前の駅から を切り替え
+const hitT = el("rect",{x:cx-80,y:166,width:160,height:74,rx:12,class:"center-hit",tabindex:"0",role:"button","aria-label":"経過時間の表示を切り替える"},gCenter);
+const flipTime = e=>{ e.stopPropagation(); S.timeMode = S.timeMode==="leg" ? "total" : "leg"; save(); tick(); };
+hitT.addEventListener("click",flipTime);
+hitT.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); flipTime(e); } });
+centerReady=true; applyLayout();
+hitC.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toCard(); } });
+
+// ---------- 描画 ----------
+let selected = null;
+function render(){
+  const r = route(), n = S.checks.length;
+  // segments
+  segEls.forEach(e=>e.setAttribute("class","seg"));
+  for(let k=0;k<N;k++){
+    const e = segEls[segIdx(k)];
+    if(n>k+1) e.setAttribute("class","seg done");
+    else if(n===k+1 && !finished() && !atStation()) e.setAttribute("class","seg walking");
+  }
+  // stations
+  const stepOf = {}; r.slice(0,N).forEach((st,k)=>stepOf[st]=k);
+  stEls.forEach((g,i)=>{
+    const k = stepOf[i]; const c = ["st"]; if(ST[i][2]) c.push("major");
+    if(n>k) c.push("done");
+    if(i===S.start) c.push("start");
+    if(!finished() && !atStation() && r[n]===i) c.push("next");
+    if(selected===i) c.push("sel");
+    g.setAttribute("class",c.join(" "));
+  });
+  // center
+  const visited = Math.min(n, N);
+  cBigN.textContent = pctNow();
+  cCnt.textContent = visited+" / 30 駅";
+  cTag.textContent = finished() ? "一周達成！" : n===0 ? "" : (S.dir==="inner"?"内回り":"外回り")+"・"+ST[S.start][0]+"発";
+  cBig.style.display = n===0 ? "none" : "";
+  cCnt.setAttribute("y", n===0 ? 270 : 298);
+  if(n===0){ const nx=ST[route()[1]][0]; cCnt.textContent = (S.dir==="inner"?"内回り":"外回り")+"で "+nx+" 方面へ"; }
+  fitW(cCnt,118); fitW(cTag);
+  placeFlag(); renderProgress(); renderNext(); renderReview(); renderStats(); renderLog(); renderSettings();
+}
+
+// 画面が見えている間だけ秒単位で更新。隠れたら止め、戻ったら実時刻から計算し直す
+let timer = null;
+function tick(){
+  const n=S.checks.length, t=nowT();
+  const leg = S.timeMode==="leg" && n>0 && !finished(), r=route();
+  if(n===0){ // 出発前：出発駅を主役に
+    const nm=ST[S.start][0]; cTl.textContent="きょうのスタート";
+    cTime.textContent=nm; cTime.classList.add("c-name"); cTime.style.fill=""; fitTime(); fitW(cTime); fitW(cTl);
+    cRest.textContent=""; cRest.style.fill="";
+    return; }
+  if(cTime.classList.contains("c-name")){ cTime.classList.remove("c-name"); cTime.style.fontSize=""; delete cTime.dataset.fitFor; }
+  cTl.textContent = !leg ? "スタートから ⇄" : atStation() ? ST[r[n-1]][0]+"に着いてから ⇄" : ST[r[n-1]][0]+"を出てから ⇄";
+  fitW(cTl);
+  cTime.textContent = n===0 ? "-:--:--" : leg ? fmtDur(t - (atStation() ? S.checks[n-1] : depOf(n-1))) : fmtDur(elapsed(t));
+  cTime.style.fill = leg ? "var(--ink)" : ""; fitTime();
+  cRest.textContent = paused() ? "休憩中" : atStation() ? ST[r[n-1]][0]+"に滞在中" : "";
+  cRest.style.fill = atStation() ? "var(--muted)" : ""; fitW(cRest,118);
+  const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+  set("sRest", n===0 ? "—" : fmtDur(totalRest(t)));
+  set("restNow", fmtDur(curRest()));
+  schedule();
+}
+function schedule(){
+  clearTimeout(timer); timer = null;
+  if(!started() || finished() || document.hidden) return;
+  timer = setTimeout(tick, 1000 - ((now() - S.checks[0]) % 1000) + 15);
+}
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ clearTimeout(timer); timer=null; } else render(); });
+
+// 駅の豆知識（つぎの駅が変わるたびにランダムで1つ。タップで別の話題に）
+const TRIVIA = {
+ "東京":["赤レンガの丸の内駅舎は1914年の完成。2012年に創建当時の姿へ復原されたよ","東海道・東北・上越など、たくさんの新幹線の起点になっている駅だよ","赤レンガ駅舎の中には「東京ステーションホテル」が入っているよ","丸の内駅舎のドーム天井には、干支のレリーフが8つ飾られているよ"],
+ "神田":["ガード下には昔ながらの飲み屋がずらり。中央線との乗り換え駅でもあるよ","古本の街・神保町や神田明神も、少し歩けば行ける距離だよ","江戸三大祭りのひとつ「神田祭」で知られる、江戸っ子の街だよ","ビルの谷間に昔ながらの老舗の食堂やそば屋が残っているよ"],
+ "秋葉原":["地名の由来は、火事よけの神様「秋葉さま」を祀った原っぱ「秋葉っ原」だよ","電気街からアニメ・ゲームの聖地へ。総武線と立体交差する駅でもあるよ","戦後に電気部品を売る露店が集まり、そこから電気街に育ったよ","近くの万世橋のあたりには、昔「万世橋駅」という駅があったよ"],
+ "御徒町":["江戸時代、「御徒（おかち）」と呼ばれた徒歩で警護する武士が住んでいたのが名前の由来だよ","アメ横はすぐそば。宝石・貴金属の問屋が集まる街としても知られているよ","アメ横の名前は「飴屋横丁」とも「アメリカ横丁」とも言われているよ","紫色の看板が目立つディスカウント店「多慶屋」が駅の近くにあるよ"],
+ "上野":["駅の目の前の上野公園には、動物園・美術館・博物館が集まっているよ","かつては東北・上越方面への玄関口。上野動物園のパンダも有名だね","上野公園の西郷隆盛像。連れている犬の名前は「ツン」だよ","上野公園は1873年、日本で最初に指定された公園のひとつだよ"],
+ "鶯谷":["山手線の中でも乗降客数がとても少ない、ちょっと静かな駅だよ","近くには正岡子規が晩年を過ごした「子規庵」があるよ","駅のすぐ西は寛永寺の墓地と上野の森。緑がぐっと近くなるよ","近くの根岸は、江戸時代から文人に好まれた静かな土地だったよ"],
+ "日暮里":["「日が暮れるのも忘れるほど楽しい里」で「ひぐらしの里」と呼ばれたのが由来だよ","谷中銀座の階段「夕やけだんだん」が近いよ。京成線で成田空港へも行けるよ","駅の近くには布や生地の問屋が並ぶ「日暮里繊維街」があるよ","駅前の騎馬像は太田道灌。江戸城を最初に築いた武将だよ"],
+ "西日暮里":["1971年開業で、山手線では高輪ゲートウェイの次に新しい駅だよ","千代田線との乗り換え駅。東大合格者数で有名な開成中学・高校の最寄りでもあるよ","日暮里との間は約500m。山手線でいちばん短い駅間だよ","近くの道灌山は、江戸時代に秋の虫の声を聞く名所だったよ"],
+ "田端":["大正から昭和の初め、芥川龍之介ら文士や芸術家が集まり「田端文士村」と呼ばれたよ","山手線と京浜東北線が並んで走る区間の、北の端っこあたりだよ","北口は崖の上にあって、高台と低地の高低差を感じられる駅だよ","近くの「田端文士村記念館」で、文士たちの暮らしを知ることができるよ"],
+ "駒込":["桜のソメイヨシノは、このあたりの「染井村」の植木職人が生んだと言われているよ","大名庭園の六義園がすぐそば。春は線路の土手のつつじもきれいだよ","六義園は、徳川綱吉の側用人・柳沢吉保がつくった庭園だよ","洋館とバラ園で有名な旧古河庭園も、ここから歩いて行けるよ"],
+ "巣鴨":["「おばあちゃんの原宿」と呼ばれる地蔵通り商店街の入り口だよ","商店街にある「とげぬき地蔵」は、病気を治すご利益で知られているよ","地蔵通りには、縁起がいいと言われる「赤いパンツ」の店が有名だよ","中山道を行き来する旅人でにぎわった、街道沿いの町だったよ"],
+ "大塚":["都内に残る唯一の都電・東京さくらトラム（都電荒川線）と乗り換えできるよ","駅前の線路沿いには、春になるとバラがたくさん咲くよ","駅前を都電がのんびり横切る、下町らしい雰囲気の駅だよ","駅の近くの天祖神社は、地元の人に親しまれている神社だよ"],
+ "池袋":["東口に西武、西口に東武。「西が東武で東が西武」は有名な覚え方だよ","乗降客数は新宿に次ぐ規模の巨大ターミナル。サンシャイン60も近いよ","「いけふくろう」という、ふくろうの石像が待ち合わせの目印だよ","池袋の名前は、袋のような形の池があったことが由来という説があるよ"],
+ "目白":["山手線しか停まらない、こぢんまりした駅だよ","駅の目の前に学習院大学のキャンパスが広がっているよ","目白の名前は、江戸の五色不動のひとつ「目白不動」が由来と言われているよ","近くの目白庭園は、無料で入れる小さな日本庭園だよ"],
+ "高田馬場":["発車メロディは「鉄腕アトム」。手塚プロダクションがこの街にあるからだよ","早稲田大学の学生でいつもにぎやか。忠臣蔵の堀部安兵衛「高田馬場の決闘」の舞台でもあるよ","「馬場」の名前は、江戸時代にここに馬の訓練場があったことから来ているよ","ラーメン店がとても多い、学生街のグルメ激戦区だよ"],
+ "新大久保":["韓国料理や韓国コスメの店が並ぶ、日本有数のコリアンタウンだよ","目白と同じく、山手線しか停まらない駅のひとつだよ","江戸時代、このあたりの武士が内職で育てたツツジの名所だったよ","駅前の通りは、週末になるとすれ違うのも大変なほどにぎわうよ"],
+ "新宿":["1日の乗降客数が世界一の駅として、ギネス世界記録に認定されているよ","駅の出口は200以上あると言われる巨大迷路。南口にはバスタ新宿があるよ","江戸時代の甲州街道の宿場「内藤新宿」が始まり。新しい宿だから新宿だよ","東京都庁は西口から歩いて10分ほど。展望室は無料で入れるよ"],
+ "代々木":["ホームから見える時計塔のようなビルは、NTTドコモ代々木ビルだよ","明治神宮の北参道は、ここから歩いてすぐだよ","名前は、代々もみの大木があったことに由来すると言われているよ","代々木公園の最寄りは、実は隣の原宿駅のほうだよ"],
+ "原宿":["明治神宮の最寄り駅。2020年に新しい駅舎になったよ","竹下通りは駅を出てすぐ。若者文化の発信地だね","旧駅舎は1924年に建てられた、都内でも古い木造駅舎だったよ","表参道のけやき並木は、駅のすぐ南から始まるよ"],
+ "渋谷":["駅前の忠犬ハチ公像は、待ち合わせ場所の定番だよ","世界的に有名なスクランブル交差点は1回の青信号で数千人が渡ることもあるよ","名前の通り「谷」の地形。駅のまわりはどこへ行っても坂道だよ","ハチ公は、亡くなった飼い主の上野博士を駅で待ち続けたよ"],
+ "恵比寿":["駅名の由来は「ヱビスビール」。工場から出荷するための貨物駅が始まりだよ","発車メロディはヱビスビールのCMでおなじみの曲だよ","恵比寿ガーデンプレイスは、ビール工場の跡地につくられた街だよ","ビールの名前→駅名→町の名前、の順で「恵比寿」が広がったよ"],
+ "目黒":["目黒駅があるのは、実は目黒区じゃなくて品川区なんだ","落語「目黒のさんま」の舞台。毎年秋にはさんま祭りも開かれるよ","目黒川の桜並木は、春になると東京でも指折りの花見スポットだよ","目黒不動尊は、江戸の五色不動のひとつだよ"],
+ "五反田":["田んぼの広さ「五反」が名前の由来と言われているよ","東急池上線のホームは、JRの上をまたぐ高いところにあるよ","駅前を流れる目黒川沿いは、桜の時期もきれいだよ","近くの池田山は、緑の多い高級住宅地として知られているよ"],
+ "大崎":["山手線の車両基地があるので、大崎止まりや大崎始発の電車が多いよ","かつては工場の街。今は高層オフィスビルが立ち並んでいるよ","りんかい線や湘南新宿ラインも乗り入れる、意外な乗り換え駅だよ","江戸時代は目黒川沿いに田畑が広がるのどかな土地だったよ"],
+ "品川":["品川駅があるのは品川区じゃなくて港区なんだ","東海道の最初の宿場町・品川宿は、駅の南のほうにあったよ","港南口のあたりは、昔は海だった場所を埋め立てた土地だよ","新幹線と京急で、名古屋方面にも羽田空港にも行ける交通の要だよ"],
+ "高輪ゲートウェイ":["2020年に開業した、山手線でいちばん新しい駅だよ","工事中に、明治時代に海の上を走った鉄道の堤「高輪築堤」が見つかったよ","駅の大きな屋根は、折り紙をイメージしたデザインだよ","駅名は公募で決まったけど、応募数1位の名前ではなかったんだ"],
+ "田町":["近くに西郷隆盛と勝海舟が会見した地の碑があるよ。江戸無血開城につながった会談だね","慶應義塾大学の三田キャンパスはこの駅が最寄りだよ","駅の西側は「三田」、東側は「芝浦」。両側で雰囲気が大きく違うよ","芝浦側の運河沿いには、水辺を歩ける遊歩道があるよ"],
+ "浜松町":["ホームの小便小僧は季節ごとに衣装が変わるよ","東京モノレールで羽田空港へ。東京タワーも歩いて行ける距離だよ","旧芝離宮恩賜庭園は駅のすぐそば。都内に残る古い大名庭園だよ","増上寺は徳川家の菩提寺。東京タワーと一緒に見られるよ"],
+ "新橋":["1872年、日本で最初の鉄道が新橋〜横浜間で開業したよ","駅前のSL広場は、サラリーマンの街・新橋のシンボルだよ","西口広場のSLは、実際に走っていた蒸気機関車C11だよ","駅のすぐそばの烏森神社は、カラフルなおみくじが人気だよ"],
+ "有楽町":["織田信長の弟・織田有楽斎の屋敷があったのが地名の由来という説があるよ","ガード下のレンガ造りの高架は100年以上前のもの。東京国際フォーラムも近いよ","1957年の歌「有楽町で逢いましょう」がヒットして、デートの街として有名になったよ","日比谷公園は駅から歩いてすぐ。日本で最初の洋風公園だよ"]
+};
+const pctNow = () => S.checks.length<=1 ? 0 : Math.round((S.checks.length-1)/N*100);
+const bar = document.getElementById("bar");
+bar.innerHTML = "<i></i>".repeat(N);
+const pick = {}; // ステップごとに選んだ話題
+function renderProgress(){
+  const n=S.checks.length, done = Math.max(0,n-1);
+  [...bar.children].forEach((b,k)=>{ b.classList.toggle("on", k<done); b.classList.toggle("cur", n>0 && !finished() && k===done); });
+  document.getElementById("barCnt").textContent = done;
+  document.getElementById("barFrom").textContent = ST[S.start][0];
+}
+function triviaFor(n){
+  const r=route(), i=r[Math.min(n,N)], name=ST[i][0], list=TRIVIA[name];
+  if(pick[n]==null) pick[n]=Math.floor(Math.random()*list.length);
+  const fact=list[pick[n]%list.length];
+  const lead = n===0 ? `出発は${name}駅。` : n===N ? `ゴールの${name}駅まであと1駅！` : `次は${name}駅だね。`;
+  return lead+fact;
+}
+
+function renderNext(){
+  const box = document.getElementById("nextBox"), r=route(), n=S.checks.length;
+  if(finished()){
+    const ms = S.checks[N]-S.checks[0];
+    const t0=S.checks[0], t1=S.checks[N], md=moodOf(N), gp=PH.goal;
+    box.innerHTML = `<div class="goal">
+      <div class="g-eye">${ST[S.start][0]}発・${S.dir==="inner"?"内回り":"外回り"}　30駅</div>
+      <div class="big">山手線 一周達成</div>
+      <div class="g-time">${fmtDur(t1-t0)}</div>
+      <div class="g-sub">${fmtT(t0)} 出発 → ${fmtT(t1)} ゴール　うち休憩・滞在 ${fmtMin(totalRest(t1))}${stepsTotal()!=null?`　${fmtNum(stepsTotal())}歩`:""}</div>
+      <button class="card-btn" id="mkCard">完歩カードを作る</button>
+      <button class="g-todo" id="gTodo"><b>${md?`調子：${md.label}`:"ゴールの調子"}　／　${gp?"写真：登録済み":"ゴールの写真"}</b><span>${md&&gp?"変更":"記録する"}</span></button>
+      <button class="link g-undo" id="undo">ゴールを取り消す</button></div>`;
+    document.getElementById("actbar").hidden = true;
+    box.querySelector("#undo").onclick = undo;
+    box.querySelector("#mkCard").onclick = makeCard;
+    box.querySelector("#gTodo").onclick = ()=>openArrive(N);
+    return;
+  }
+  const toTop = ()=>window.scrollTo({top:0,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+  const ab = document.getElementById("actbar"); ab.hidden=false;
+  // --- 駅に滞在中（到着後、出発前） ---
+  if(atStation()){
+    const k=n-1, here=r[k], nx=r[n], ph=PH[here], md=moodOf(k);
+    box.innerHTML = `<div class="next">
+      <div class="eyebrow">${k} / 30 駅目に到着　滞在中</div>
+      <div class="row"><div class="name">${ST[here][0]}<small>${ST[here][1]}</small></div>
+        <div class="meta">つぎは<b>${ST[nx][0]}${n===N?"（ゴール）":""}</b></div></div>
+      <div class="todo">
+        <button class="todo-i${md?" ok":""}" id="tdMood"><span>調子</span><b>${md?md.label:"まだ"}</b></button>
+        <button class="todo-i${ph?" ok":""}" id="tdPh"><span>駅の写真</span><b>${ph?"登録済み":"まだ"}</b></button>
+      </div>
+      <div class="sub-actions"><button class="link" id="undo">到着を取り消す</button><button class="to-map" id="toMap">路線図へ ▲</button></div>
+    </div>`;
+    ab.innerHTML = `<div class="btns"><button class="go" id="go">${ST[nx][0]}へ出発！</button><button class="pause" id="todo">やること</button></div>`;
+    ab.querySelector("#go").onclick = depart;
+    ab.querySelector("#todo").onclick = ()=>openArrive(k);
+    box.querySelector("#tdMood").onclick = ()=>openArrive(k);
+    box.querySelector("#tdPh").onclick = ()=>openArrive(k);
+    box.querySelector("#undo").onclick = undo;
+    box.querySelector("#toMap").onclick = toTop;
+    return;
+  }
+  // --- 歩いている途中（または出発前） ---
+  const i = r[n], isStart = n===0, isGoal = n===N;
+  const pz = paused();
+  box.innerHTML = `<div class="next${pz?" paused":""}">
+    ${pz?`<div class="rest"><span>${ST[r[n-1]][0]}を出て休憩中</span><b id="restNow">${fmtDur(curRest())}</b></div>`:""}
+    <div class="eyebrow">${isStart?"出発駅":isGoal?"いま歩いている区間　ゴールへ":`いま歩いている区間　${n} / 30 駅目へ`}</div>
+    <div class="row">
+      ${isStart?`<div class="name">${ST[i][0]}<small>${ST[i][1]}</small></div>`
+        :`<div class="leg"><span class="from">${ST[r[n-1]][0]}</span><span class="to">${ST[i][0]}${isGoal?"（ゴール）":""}<small>${ST[i][1]}</small></span></div>`}
+      <div class="meta">${isStart?`まわる向き<b>${S.dir==="inner"?"内回り":"外回り"}</b>`:`ゴールまで<b>あと${N-n+1}駅</b>${etaGoal()?`<span class="eta">予想 <b>${fmtT(etaGoal())}</b> ゴール</span>`:`<span class="eta">予想時刻は2駅目から</span>`}`}</div>
+    </div>
+    <button class="trivia" id="triv" aria-label="別の豆知識を見る"><span class="q">MEMO</span><span>${triviaFor(n)}</span></button>
+    <div class="sub-actions">${n>0?`<button class="link" id="undo">出発を取り消す</button>`:`<button class="link" id="chg">出発駅・向きを変える</button>`}<button class="to-map" id="toMap">路線図へ ▲</button></div>
+  </div>`;
+  ab.innerHTML = `<div class="btns" ${isStart?'style="grid-template-columns:1fr"':""}>
+      <button class="go" id="go">${isStart?ST[i][0]+"から出発する":isGoal?"ゴールに到着！":ST[i][0]+"に到着！"}</button>
+      ${isStart?"":`<button class="pause${pz?" on":""}" id="pz">${pz?"再開":"休憩"}</button>`}
+    </div>`;
+  ab.querySelector("#go").onclick = checkIn;
+  const p = ab.querySelector("#pz"); if(p) p.onclick = togglePause;
+  box.querySelector("#triv").onclick = ()=>{ const L=TRIVIA[ST[i][0]].length; pick[n]=((pick[n]||0)+1)%L; renderNext(); };
+  const u = box.querySelector("#undo"); if(u) u.onclick = undo;
+  const c = box.querySelector("#chg"); if(c) c.onclick = ()=>openSettings(true);
+  box.querySelector("#toMap").onclick = toTop;
+}
+
+
+// ---------- 調子スタンプ ----------
+const MOODS = [
+  {id:"great",label:"絶好調",lv:5,c:"var(--m5)"},{id:"good",label:"元気",lv:4,c:"var(--m4)"},
+  {id:"ok",label:"ふつう",lv:3,c:"var(--m3)"},{id:"hungry",label:"はらぺこ",lv:3,c:"var(--mh)"},
+  {id:"tired",label:"疲れた",lv:2,c:"var(--m2)"},{id:"beat",label:"へとへと",lv:1,c:"var(--m1)"},
+  {id:"feet",label:"足が痛い",lv:1,c:"var(--m1)"},{id:"thirsty",label:"のどカラ",lv:3,c:"var(--mh)"}
+];
+const moodOf = k => MOODS.find(m=>m.id===S.mood[k]);
+const moodSkip = {};
+function moodGrid(k){ return `<div class="mgrid">${MOODS.map(m=>`<button class="mbtn${S.mood[k]===m.id?" sel":""}" data-mk="${k}" data-mid="${m.id}"><i style="background:${m.c}"></i>${m.label}</button>`).join("")}</div>`; }
+function bindMood(root, after){ root.querySelectorAll(".mbtn").forEach(b=>b.onclick=()=>{ const k=+b.dataset.mk; S.mood[k] = S.mood[k]===b.dataset.mid ? undefined : b.dataset.mid; if(S.mood[k]===undefined) delete S.mood[k]; save(); after ? after() : render(); }); }
+
+// ---------- 到着・出発の「やること」画面 ----------
+let arriveOpen=null;
+function openArrive(k){
+  arriveOpen=k; const r=route(), here=r[k], isStart=!started(), isGoal=k===N, nx=r[k+1];
+  const slot = isGoal ? "goal" : here;
+  const ph=PH[slot], md=moodOf(k), box=document.getElementById("arrive");
+  box.innerHTML = `<div class="arr-card" role="dialog" aria-label="${ST[here][0]}">
+    <div class="arr-top"><div><div class="arr-eye">${isStart?"出発の準備":isGoal?`${fmtT(S.checks[k])} ゴール　30 / 30 駅`:`${fmtT(S.checks[k])} 到着　${k} / 30 駅目`}</div>
+      <div class="arr-name">${isStart?ST[here][0]+"からスタート":isGoal?ST[here][0]+"にゴール！":ST[here][0]+"に到着！"}</div></div>
+      ${isStart||isGoal?`<button class="x" id="arX" aria-label="閉じる">✕</button>`:""}</div>
+    <div class="arr-step"><div class="arr-h"><span class="n">1</span>いまの調子は？</div>${moodGrid(k)}</div>
+    <div class="arr-step"><div class="arr-h"><span class="n">2</span>${isGoal?"ゴールの写真":"駅の写真"}</div>
+      ${ph?`<button class="photo1" id="arPh" aria-label="写真を大きく見る"><img src="${ph.url}" alt="${ST[here][0]}の写真"></button>`:""}
+      <label class="add-photo" for="photoIn" id="arAdd">${ph?"写真を差し替え":isGoal?"ゴールの記念写真を撮る・選ぶ":"駅名看板を撮る・選ぶ"}</label></div>
+    <div class="arr-foot">
+      <button class="go" id="arGo">${isStart?"スタート！":isGoal?"記録して閉じる":ST[nx][0]+(k+1===N?"（ゴール）":"")+"へ出発！"}</button>
+      ${isStart||isGoal?"":`<div class="arr-links"><button class="link arr-later" id="arUndo">到着を取り消す</button><button class="link arr-later" id="arLater">駅でゆっくりする</button></div>`}
+    </div></div>`;
+  box.hidden=false; document.body.style.overflow="hidden";
+  bindMood(box, ()=>openArrive(k));
+  box.querySelector("#arAdd").onclick=()=>{ photoSt=slot; };
+  const ap=box.querySelector("#arPh"); if(ap) ap.onclick=()=>openViewer(slot);
+  const ag=box.querySelector("#arGo"); ag.onclick = isGoal ? ()=>{ closeArrive(); render(); } : depart;
+  if(!openArrive.shown){ ag.disabled=true; setTimeout(()=>{ ag.disabled=false; },700); } // 到着ボタンの連打で出発しないように
+  openArrive.shown=true;
+  const lt=box.querySelector("#arLater"); if(lt) lt.onclick=()=>{ closeArrive(); render(); };
+  const au=box.querySelector("#arUndo"); if(au) au.onclick=()=>{ closeArrive(); undo(); };
+  const x=box.querySelector("#arX"); if(x) x.onclick=()=>{ closeArrive(); render(); };
+}
+function closeArrive(){ arriveOpen=null; openArrive.shown=false; const b=document.getElementById("arrive"); b.hidden=true; b.innerHTML=""; document.body.style.overflow=""; }
+
+// ---------- ふりかえり（区間ランキングなど。記録が変わったときだけ計算） ----------
+function renderReview(){
+  const n=S.checks.length, r=route(), box=document.getElementById("review");
+  const legs=[]; for(let k=1;k<n;k++) legs.push({k, from:ST[r[k-1]][0], to:ST[r[k]][0], d:S.checks[k]-depOf(k-1), rest:restIn(depOf(k-1),S.checks[k])});
+  if(!finished()){ box.hidden=true; return; } // ゴールしてから全体をまとめて表示
+  box.hidden=false;
+  const max=Math.max(...legs.map(l=>l.d));
+  const row=(l,j)=>`<li><span class="no">${j+1}</span><span class="nm">${l.from} → ${l.to}${l.rest>=60000?`<small>うち休憩 ${fmtMin(l.rest)}</small>`:""}<span class="tr"><i style="width:${Math.max(4,Math.round(l.d/max*100))}%"></i></span></span><span class="v">${fmtMin(l.d)}</span></li>`;
+  const slow=[...legs].sort((a,b)=>b.d-a.d).slice(0,3);
+  const fast=[...legs].sort((a,b)=>a.d-b.d).slice(0,3);
+  // 長く休んだ駅
+  let restTop=null; for(let k=0;k<n && k<N;k++){ const end = k+1<n ? S.checks[k+1] : (finished()?S.checks[N]:now()); const x=(k>0?stayAt(k):0)+restIn(depOf(k),end); if(x>=60000 && (!restTop || x>restTop.x)) restTop={st:ST[r[k]][0],x}; }
+  // 前半と後半のペース
+  let paceTxt="";
+  if(legs.length>=6){ const h=Math.floor(legs.length/2), avg=a=>a.reduce((s,l)=>s+l.d,0)/a.length;
+    const a1=avg(legs.slice(0,h)), a2=avg(legs.slice(h)), diff=Math.round((a2-a1)/60000);
+    paceTxt = diff>=2 ? `後半は1駅あたり${diff}分ゆっくりに。疲れが出てきたかも` : diff<=-2 ? `後半のほうが1駅あたり${-diff}分速い！ 調子が上がってきたね` : `前半も後半もほぼ同じペース。安定してるね`; }
+  const slowest=slow[0];
+  const st=stepsTotal();
+  let stepRank="";
+  if(st!=null){ const sl=legs.map((l,j)=>({...l, s:S.steps[l.k-1]})).filter(l=>l.s!=null).sort((a,b)=>b.s-a.s).slice(0,3), mx=sl.length?sl[0].s:1;
+    stepRank = `<div><h3>歩数が多かった区間</h3><ol class="rank">${sl.map((l,j)=>`<li><span class="no">${j+1}</span><span class="nm">${l.from} → ${l.to}<span class="tr"><i style="width:${Math.max(4,Math.round(l.s/mx*100))}%"></i></span></span><span class="v">${fmtNum(l.s)}<small style="font-size:11px"> 歩</small></span></li>`).join("")}</ol></div>`; }
+  const firstTired = (()=>{ for(let k=0;k<=N;k++){ const m=moodOf(k); if(m && m.lv<=2) return `${ST[r[k]][0]}あたりから疲れが出たね`; } return Object.keys(S.mood).length ? "最後まで元気だった！" : "調子の記録なし"; })();
+  const moodTxt = firstTired;
+  const say = `いちばんの難所は${slowest.from}→${slowest.to}の${fmtMin(slowest.d)}。30区間、ぜんぶ歩ききったね！`;
+  document.getElementById("rv").innerHTML = `
+    <p class="say">${say}</p>
+    <div><h3>調子のうつりかわり</h3><div class="mstrip">${Array.from({length:N+1},(_,k)=>{ const m=moodOf(k); return `<i style="${m?`background:${m.c}`:""}" title="${ST[r[k]][0]}${m?"："+m.label:""}"></i>`; }).join("")}</div>
+      <div class="mlegend"><span>${ST[S.start][0]}（出発）</span><span>${moodTxt}</span><span>ゴール</span></div></div>
+    <div><h3>時間がかかった区間</h3><ol class="rank">${slow.map(row).join("")}</ol></div>
+    <div><h3>スイスイ歩けた区間</h3><ol class="rank fast">${fast.map(row).join("")}</ol></div>
+    ${stepRank}
+    <div class="facts">
+      ${st!=null?`<div class="fact wide">総歩数<b class="big">${fmtNum(st)} 歩</b></div>`:""}
+      <div class="fact">いちばん長く休んだ駅<b>${restTop?`${restTop.st}（${fmtMin(restTop.x)}）`:"休まず歩ききった！"}</b></div>
+      <div class="fact">ペースの変化<b>${paceTxt}</b></div>
+    </div>
+    ${stepBox()}`;
+  bindStepBox();
+}
+
+// ---------- 歩数の取り込み（iPhoneのショートカット経由） ----------
+// ショートカットは「きょうの歩数の記録（時刻と歩数）」をそのまま渡すだけ。区間への振り分けはアプリが行う
+function parseStamp(t){
+  const m=t.match(/(\d{4})\s*[\/年\-.]\s*(\d{1,2})\s*[\/月\-.]\s*(\d{1,2})\s*日?[^\d]*?(\d{1,2})\s*[:時]\s*(\d{2})(?:\s*[:分]\s*(\d{2}))?/);
+  if(!m) return null; let h=+m[4]; if(/午後|PM|pm/.test(t) && h<12) h+=12; if(/午前|AM|am/.test(t) && h===12) h=0;
+  return new Date(+m[1],+m[2]-1,+m[3],h,+m[5],+(m[6]||0)).getTime();
+}
+function stepBox(){
+  const has = stepsTotal()!=null;
+  return `<details class="stepbox"${has?"":" open"}><summary>${has?"歩数を取り込み直す":"iPhoneの歩数を取り込む"}</summary>
+    <ol class="steps-how">
+      <li><b>ショートカット「ぐるっと山手線 歩数」を実行</b><span>きょうの歩数の記録がコピーされます</span></li>
+      <li><b>ここに貼り付けて取り込む</b>
+        <textarea id="stIn" rows="3" placeholder="ここに貼り付け"></textarea>
+        <button class="sbtn main" id="stImport">取り込む</button></li>
+    </ol>
+    <details class="howto"><summary>ショートカットの作り方（最初の1回だけ・約3分）</summary>${SHORTCUT_HOWTO}</details>
+  </details>`;
+}
+function bindStepBox(){
+  const b=document.getElementById("stImport"); if(!b) return;
+  b.onclick=()=>{
+    const raw=document.getElementById("stIn").value.trim(); if(!raw){ toast("ショートカットの結果を貼り付けてください"); return; }
+    const arr=Array(N).fill(0); let used=0, read=0;
+    raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).forEach(l=>{
+      const parts=l.split(/[;；]/); if(parts.length<2) return;
+      const t=parseStamp(parts[0]), v=parseFloat(parts[parts.length-1].replace(/[^\d.]/g,""));
+      if(t==null || isNaN(v)) return; read++;
+      if(t<S.checks[0] || t>=S.checks[N]) return;               // 散歩の前後の歩数は数えない
+      let k=0; while(k<N-1 && t>=S.checks[k+1]) k++;              // どの区間の歩数か
+      arr[k]+=v; used++;
+    });
+    if(!read){ toast("歩数の記録を読み取れませんでした。貼り付けた内容を確かめてください"); return; }
+    if(!used){ toast("散歩していた時間の歩数が見つかりませんでした。散歩した日に実行してください"); return; }
+    S.steps=arr.map(Math.round); save(); render(); toast(`歩数を取り込みました（合計 ${fmtNum(stepsTotal())} 歩）`);
+  };
+}
+const SHORTCUT_HOWTO = `<p class="note2">iPhoneにはじめから入っている「ショートカット」アプリで作ります。アクション（命令）を4つ並べるだけです。</p>
+<ol class="sc">
+<li>ショートカットアプリを開き、右上の <b>＋</b> をタップ。いちばん上の名前をタップして <b>ぐるっと山手線 歩数</b> にします。</li>
+<li>下の「アクションを検索」に <b>ヘルスケア</b> と入力し、<b>ヘルスケアサンプルを検索</b> をタップ。
+  <ol><li>青い文字の <b>種類</b> をタップして <b>歩数</b> を選ぶ</li>
+  <li><b>フィルタを追加</b> をタップし、「開始日」「が今日」になっていればOK（違うときはタップして「今日」に）</li>
+  <li>Apple Watchも使っている人は、もう一度 <b>フィルタを追加</b> →「ソース」→ 自分のiPhoneを選ぶ（歩数の二重計測を防ぎます）</li></ol></li>
+<li>アクションを検索で <b>繰り返す</b> と入力し、<b>各項目を繰り返す</b> をタップ。「繰り返し」と「繰り返しの終了」の2行が入ります。</li>
+<li>アクションを検索で <b>テキスト</b> と入力し、<b>テキスト</b> を長押しして、「繰り返し」と「繰り返しの終了」の<b>間</b>にドラッグします。
+  <ol><li>テキストの枠をタップし、キーボードの上に出る <b>繰り返し項目</b> をタップして入れる</li>
+  <li>入った「繰り返し項目」をタップ → 一覧から <b>開始日</b> を選ぶ</li>
+  <li>続けて半角の <code>;</code>（セミコロン）を入力</li>
+  <li>もう一度 <b>繰り返し項目</b> を入れて、タップ → <b>値</b> を選ぶ</li>
+  <li>枠の中が「繰り返し項目（開始日）<code>;</code>繰り返し項目（値）」になれば完成</li></ol></li>
+<li>アクションを検索で <b>テキストを結合</b> を追加（「繰り返しの終了」の下）。「繰り返しの結果」を <b>改行</b> で結合、になっているか確認します（「スペース」なら、タップして「改行」に）。</li>
+<li>アクションを検索で <b>クリップボードにコピー</b> を追加して、右上の <b>完了</b> をタップ。</li>
+</ol>
+<p class="note2">はじめて実行したときに、ヘルスケアのデータを使ってよいか聞かれるので「許可」を選んでください。散歩した日のうちに実行してください（「今日」の歩数だけを読み取ります）。できたショートカットは、長押し →「共有」→「iCloudリンクをコピー」で友人にも渡せます。</p>`;
+
+function renderStats(){
+  const n=S.checks.length;
+  document.getElementById("stats").innerHTML = `
+    <div class="stat"><span>休憩・滞在の合計</span><b id="sRest">—</b></div>`;
+  tick();
+}
+
+function renderLog(){
+  const r=route(), n=S.checks.length;
+  document.getElementById("log").innerHTML = r.map((i,k)=>{
+    const done = k<n, nextup = k===n;
+    const split = done && k>0 ? fmtMin(S.checks[k]-depOf(k-1)) : "";
+    const rs = done && k<N ? stayAt(k)*(k>0?1:0) + restIn(depOf(k), k+1<n ? S.checks[k+1] : now()) : 0;
+    const restTxt = rs>=60000 ? `<span class="rest-pill">ここで休憩 ${fmtMin(rs)}</span>` : (done && k===n-1 && (paused()||atStation()) ? `<span class="rest-pill${atStation()?" stay":""}">${atStation()?"滞在中":"休憩中"}</span>` : "");
+    const hasPh = done && PH[k===N ? "goal" : i];
+    const md = done && moodOf(k), mTxt = md ? `<span class="mpill"><i style="background:${md.c}"></i>${md.label}</span>` : "";
+    const tag = k===0?`<span class="tag">START</span>`:k===N?`<span class="tag">GOAL</span>`:"";
+    return `<li class="${done?"done":""} ${nextup?"nextup":""}" ${done?`data-st="${i}"`:""}><span class="pin"></span>
+      <span class="nm">${tag}${ST[i][0]}${restTxt||hasPh||mTxt?"<br>":""}${restTxt}${mTxt}${hasPh?`<span class="ph-count">写真</span>`:""}</span>
+      <span class="rt">${done?fmtT(S.checks[k])+(split?`<small>+${split}${S.steps&&S.steps[k-1]!=null?` · ${fmtNum(S.steps[k-1])}歩`:""}</small>`:"<small>出発</small>"):nextup?`<small>つぎ</small>`:""}</span></li>`;
+  }).join("");
+}
+document.getElementById("log").addEventListener("click",e=>{ const li=e.target.closest("li[data-st]"); if(li) openSheet(+li.dataset.st); });
+
+// ---------- 操作 ----------
+// 出発前：準備画面を開く ／ 歩行中：到着を記録して、やること画面を開く
+function checkIn(){
+  if(finished()) return;
+  if(!started()){ openArrive(0); return; }
+  const t = now();
+  if(paused()) S.pauses[S.pauses.length-1].e = t; // 休憩中に到着したら自動で再開
+  S.checks.push(t); save(); closeSheet(); render();
+  if(finished()) celebrate(); else openArrive(S.checks.length-1);
+}
+// 駅を出発（ここから次の区間のタイマーが始まる）
+function depart(){
+  const t=now();
+  if(!started()){ S.checks=[t]; S.deps={0:t}; }
+  else if(atStation()) S.deps[S.checks.length-1]=t;
+  save(); closeArrive(); render();
+}
+function undo(){
+  const n=S.checks.length;
+  if(n>=2 && !finished() && S.deps[n-1]!=null){ delete S.deps[n-1]; } // 出発を取り消して駅に戻る
+  else { S.checks.pop(); delete S.deps[S.checks.length]; }
+  if(!S.checks.length){ S.pauses=[]; S.deps={}; }
+  else { const last=S.checks[S.checks.length-1]; S.pauses=S.pauses.filter(p=>p.s<last); }
+  save(); render();
+}
+function togglePause(){
+  if(!started() || finished() || atStation()) return;
+  const t=now();
+  if(paused()) S.pauses[S.pauses.length-1].e=t; else S.pauses.push({s:t,e:null});
+  save(); render();
+}
+
+function openSheet(i){
+  selected = i; const r=route(), n=S.checks.length, k=r.indexOf(i);
+  const done = k<n, isNext = !finished() && r[n]===i;
+  const sh = document.getElementById("sheet");
+  let info, btn="";
+  if(!started()){
+    info = i===S.start ? `いまの出発駅です。` : `${ST[S.start][0]}から${S.dir==="inner"?"内回り":"外回り"}で <b>${k}駅目</b>`;
+    if(i!==S.start) btn = `<button class="go" id="shSet">ここを出発駅にする</button>`;
+    else btn = `<button class="go" id="shGo">${ST[i][0]}を出発する</button>`;
+  } else {
+    const rs = done && k<N ? restIn(S.checks[k], k+1<n ? S.checks[k+1] : now()) : 0;
+    info = done ? `<b>${fmtT(S.checks[k])}</b> に到着 ・ ${k===0?"出発駅":`<b>${k}駅目</b>`}${rs>=60000?` ・ ここで休憩 <b>${fmtMin(rs)}</b>`:""}`
+         : `<b>${k}駅目</b> ・ ここまで あと <b>${k-n+1}駅</b>`;
+    if(isNext) btn = `<button class="go" id="shGo">${ST[i][0]}に到着！</button>`;
+    if(i===S.start && n===N) btn = `<button class="go" id="shGo">ゴールに到着！</button>`;
+  }
+  // 写真は1駅1枚。出発駅だけは「出発」と「ゴール」を別々に残す
+  const block = (slot, label) => { const ph = PH[slot]; return `<div class="phblock">${label?`<div class="phlabel">${label}</div>`:""}
+    ${ph?`<button class="photo1" data-slot="${slot}" aria-label="写真を大きく見る"><img src="${ph.url}" alt="${slotName(slot)}の写真"></button>`:""}
+    <label class="add-photo" for="photoIn" data-slot="${slot}">${ph?"写真を差し替え":"写真を登録"}</label></div>`; };
+  let photoHtml = "";
+  if(done){
+    const steps = i===S.start ? [0].concat(finished()?[N]:[]) : [k];
+    photoHtml += steps.map(st=>`<div class="phblock"><div class="phlabel">${steps.length>1?(st===0?"出発時の調子":"ゴール時の調子"):"着いたときの調子"}</div>${moodGrid(st)}</div>`).join("");
+  }
+  if(started() && (done || i===S.start)){
+    if(i===S.start) photoHtml += block(i, finished()?"出発の写真":"") + (finished()?block("goal","ゴールの写真"):"");
+    else photoHtml += block(i, "");
+  }
+  sh.innerHTML = `<div class="card" role="dialog" aria-label="${ST[i][0]}">
+    <div class="top"><h3><small>${ST[i][1]}</small>${ST[i][0]}</h3><button class="x" id="shX" aria-label="閉じる">✕</button></div>
+    <div class="info">${info}</div>${photoHtml}${btn}</div>`;
+  sh.querySelectorAll("label[data-slot]").forEach(l=>l.onclick=()=>{ photoSt = l.dataset.slot==="goal" ? "goal" : +l.dataset.slot; sheetOpen = i; });
+  sh.querySelectorAll("button[data-slot]").forEach(b=>b.onclick=()=>openViewer(b.dataset.slot==="goal" ? "goal" : +b.dataset.slot));
+  bindMood(sh, ()=>openSheet(i));
+  sh.hidden = false;
+  sh.querySelector("#shX").onclick = closeSheet;
+  const g = sh.querySelector("#shGo"); if(g) g.onclick = checkIn;
+  const s = sh.querySelector("#shSet"); if(s) s.onclick = ()=>{ S.start=i; save(); closeSheet(); render(); };
+  render();
+}
+function closeSheet(){ selected=null; sheetOpen=null; document.getElementById("sheet").hidden=true; render(); }
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
+
+// 設定
+const setPanel = document.getElementById("settings"), btnSet = document.getElementById("btnSettings");
+const selStart = document.getElementById("selStart");
+selStart.innerHTML = ST.map((s,i)=>`<option value="${i}">${s[0]}</option>`).join("");
+function openSettings(force){
+  const open = force===true ? true : setPanel.hidden;
+  setPanel.hidden = !open; btnSet.setAttribute("aria-expanded",open);
+  if(open) setPanel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+btnSet.onclick = ()=>openSettings();
+selStart.onchange = ()=>{ S.start=+selStart.value; save(); render(); };
+document.querySelectorAll(".seg-ctl button").forEach(b=>b.onclick=()=>{ S.dir=b.dataset.dir; save(); render(); });
+function renderSettings(){
+  const lock = started() && !finished();
+  selStart.value = S.start; selStart.disabled = lock;
+  document.querySelectorAll(".seg-ctl button").forEach(b=>{ b.setAttribute("aria-pressed", b.dataset.dir===S.dir); b.disabled=lock; });
+  document.getElementById("lockNote").hidden = !lock;
+}
+const resetBox = document.getElementById("resetBox");
+function showResetBtn(){
+  resetBox.innerHTML = `<button class="danger" id="btnReset">記録をリセット</button>`;
+  resetBox.querySelector("#btnReset").onclick = ()=>{
+    resetBox.innerHTML = `<div class="confirm"><span>記録と写真を消す？</span><button class="yes" id="rY">消す</button><button class="no" id="rN">やめる</button></div>`;
+    resetBox.querySelector("#rY").onclick = ()=>{ S.checks=[]; S.deps={}; S.pauses=[]; S.mood={}; S.steps=null; S.tOff=0; save(); clearPhotos(); showResetBtn(); syncTest(); render(); };
+    resetBox.querySelector("#rN").onclick = showResetBtn;
+  };
+}
+showResetBtn();
+
+// ---------- 写真（端末内のIndexedDBに保存） ----------
+let PH = {}, photoSt = null, sheetOpen = null; // PH[駅番号 または "goal"] = {id, ts, url}
+const slotName = slot => slot==="goal" ? ST[S.start][0]+"（ゴール）" : ST[slot][0];
+const slotStation = slot => slot==="goal" ? S.start : slot;
+const dbp = new Promise(res=>{
+  try{
+    const rq = indexedDB.open("yamanote-photos",1);
+    rq.onupgradeneeded = ()=>rq.result.createObjectStore("p",{keyPath:"id",autoIncrement:true});
+    rq.onsuccess = ()=>res(rq.result); rq.onerror = ()=>res(null); rq.onblocked = ()=>res(null);
+  }catch(e){ res(null); }
+});
+const store = async mode => { const db=await dbp; return db ? db.transaction("p",mode).objectStore("p") : null; };
+const req = r => new Promise((ok,ng)=>{ r.onsuccess=()=>ok(r.result); r.onerror=()=>ng(r.error); });
+const stOf = rec => rec.st ?? route()[rec.k]; // 旧形式（到着順で保存）にも対応
+function addToMem(rec){ const st=stOf(rec); if(PH[st]) URL.revokeObjectURL(PH[st].url); PH[st]={id:rec.id, ts:rec.ts, url:URL.createObjectURL(rec.blob)}; }
+async function loadPhotos(){
+  try{ const st=await store("readonly"); if(!st) return;
+    (await req(st.getAll())).sort((a,b)=>a.ts-b.ts).forEach(addToMem); render(); }catch(e){}
+}
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2600); }
+// 長辺1600pxのJPEGに縮小して容量を抑える
+async function shrink(file){
+  try{
+    const url = URL.createObjectURL(file), img = new Image();
+    img.src = url; await img.decode();
+    const sc = Math.min(1, 1600/Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width=Math.round(img.naturalWidth*sc); c.height=Math.round(img.naturalHeight*sc);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+    const b = await new Promise(r=>c.toBlob(r,"image/jpeg",0.82));
+    return b || file;
+  }catch(e){ return file; }
+}
+const photoIn = document.getElementById("photoIn");
+photoIn.addEventListener("change", async ()=>{
+  const file=photoIn.files[0]; photoIn.value="";
+  if(!file || photoSt==null) return;
+  const st0 = photoSt, old = PH[st0];
+  try{
+    try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
+    const blob = await shrink(file), rec = {st:st0, ts:now(), blob};
+    let s1 = await store("readwrite"); if(!s1) throw new Error("no-db");
+    rec.id = await req(s1.add(rec));
+    if(old){ try{ const s2=await store("readwrite"); await req(s2.delete(old.id)); }catch(e){} }
+    addToMem(rec);
+    toast(`${slotName(st0)}の写真を${old?"差し替えました":"登録しました"}`);
+  }catch(e){ toast("写真を保存できませんでした。プライベートブラウズでは保存できません"); }
+  if(arriveOpen!=null) openArrive(arriveOpen); else if(sheetOpen!=null) openSheet(sheetOpen); else render();
+});
+function openViewer(slot){
+  const ph = PH[slot]; if(!ph) return; const f={p:ph}, nm=slotName(slot);
+  const v = document.getElementById("viewer");
+  const draw = (confirming)=>{
+    v.innerHTML = `<div class="vbar"><span>${nm}　${fmtT(f.p.ts)} 追加</span><button id="vX">閉じる</button></div>
+      <div class="vimg"><img src="${f.p.url}" alt="${nm}の写真"></div>
+      <div class="vrow">${confirming?`<span>この写真を削除しますか？</span><button class="vdel" id="vY">削除する</button><button id="vN">やめる</button>`:`<button class="vdel" id="vD">この写真を削除</button>`}</div>`;
+    v.querySelector("#vX").onclick = ()=>{ v.hidden=true; v.innerHTML=""; };
+    const d=v.querySelector("#vD"); if(d) d.onclick=()=>draw(true);
+    const nn=v.querySelector("#vN"); if(nn) nn.onclick=()=>draw(false);
+    const y=v.querySelector("#vY"); if(y) y.onclick=async()=>{
+      try{ const st=await store("readwrite"); await req(st.delete(ph.id)); }catch(e){}
+      URL.revokeObjectURL(ph.url); delete PH[slot];
+      v.hidden=true; v.innerHTML=""; toast("写真を削除しました"); if(arriveOpen!=null) openArrive(arriveOpen); else openSheet(slotStation(slot));
+    };
+  };
+  draw(false); v.hidden=false;
+}
+async function clearPhotos(){
+  try{ const st=await store("readwrite"); if(st) await req(st.clear()); }catch(e){}
+  Object.values(PH).forEach(p=>URL.revokeObjectURL(p.url)); PH={};
+}
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ const v=document.getElementById("viewer"); v.hidden=true; v.innerHTML=""; } });
+
+// ---------- 完歩カード（1080×1600の画像を描いて保存） ----------
+let DL = null;
+(async()=>{ try{ DL = (await window.claude?.use?.("downloads")) || null; }catch(e){ DL=null; } })();
+const loadImg = url => new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=url; });
+async function makeCard(){
+  const btn=document.getElementById("mkCard"); if(btn){ btn.disabled=true; btn.textContent="作成中…"; }
+  const F='"Zen Kaku Gothic New","Hiragino Sans",sans-serif', FN='"Barlow Semi Condensed","Zen Kaku Gothic New",sans-serif';
+  try{ await Promise.all(['900 64px','700 30px','500 20px'].map(w=>document.fonts.load(w+' "Zen Kaku Gothic New"')).concat(document.fonts.load('700 120px "Barlow Semi Condensed"'))); }catch(e){}
+  const C={bg:"#F3F6EE",panel:"#FFFFFF",fg:"#18210F",muted:"#69735F",track:"#D9E0CF",line:"#86C232",ink:"#3D6B10"};
+  const W=1080,H=1600, cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+  const x=cv.getContext("2d"), r=route(), t0=S.checks[0], t1=S.checks[N];
+  const rr=(X,Y,w,h,rad)=>{ x.beginPath(); x.roundRect ? x.roundRect(X,Y,w,h,rad) : x.rect(X,Y,w,h); };
+  x.fillStyle=C.bg; x.fillRect(0,0,W,H);
+  // 見出し
+  const d=new Date(t0), wd="日月火水木金土"[d.getDay()];
+  x.fillStyle=C.muted; x.font=`700 30px ${F}`; x.textBaseline="alphabetic";
+  x.fillText(`${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}（${wd}）  ${ST[S.start][0]}発・${S.dir==="inner"?"内回り":"外回り"}`,60,92);
+  x.fillStyle=C.fg; x.font=`900 64px ${F}`; x.fillText("ぐるっと山手線　完歩",60,170);
+  // 路線図
+  rr(40,205,W-80,880,32); x.fillStyle=C.panel; x.fill();
+  const sc=1.78, ox=(W-340*sc)/2+6*sc - 10, oy=225+2*sc;
+  x.save(); x.setTransform(sc,0,0,sc,ox,oy);
+  x.lineCap="round"; x.lineWidth=9; x.strokeStyle=C.line;
+  segEls.forEach(e=>x.stroke(new Path2D(e.getAttribute("d"))));
+  ST.forEach((st,i)=>{ x.beginPath(); x.arc(POS[i][0],POS[i][1],st[2]?6.5:5,0,7); x.fillStyle=C.line; x.fill(); x.lineWidth=2.5; x.strokeStyle=C.panel; x.stroke(); });
+  x.textBaseline="alphabetic";
+  ST.forEach((st,i)=>{
+    const o={R:[12,4,"left"],L:[-12,4,"right"],T:[0,-11,"center"],B:[0,19,"center"],TL:[-9,-9,"right"],TR:[9,-8,"left"],BR:[9,15,"left"],BL:[-9,15,"right"]}[SIDE[i]];
+    x.textAlign=o[2];
+    if(i===S.start){
+      x.font=`900 13px ${F}`; const w=x.measureText(st[0]).width, tx=POS[i][0]+o[0]+(o[2]==="left"?5:o[2]==="right"?-5:0), ty=POS[i][1]+o[1]+1;
+      const lx = o[2]==="left"?tx:o[2]==="right"?tx-w:tx-w/2;
+      x.fillStyle=C.fg; rr(lx-5,ty-12.5,w+10,17,6); x.fill();
+      x.fillStyle=C.panel; x.fillText(st[0],tx,ty);
+      x.fillStyle=C.ink; x.font=`700 9px ${FN}`; x.fillText("START", o[2]==="right"?lx+w+5:o[2]==="center"?lx+w/2:lx-5, ty-16);
+    } else {
+      x.font=`${st[2]?900:700} ${st[2]?13:11}px ${F}`; x.fillStyle=st[2]?C.fg:C.ink; x.fillText(st[0],POS[i][0]+o[0],POS[i][1]+o[1]);
+    }
+  });
+  x.restore();
+  // 中央：総時間
+  const cxp=ox+CXC*sc; x.textAlign="center";
+  x.fillStyle=C.muted; x.font=`700 26px ${F}`; x.fillText("30駅 完歩",cxp,oy+178*sc);
+  x.fillStyle=C.ink; { const tx=fmtDur(t1-t0); let fs=84; x.font=`700 ${fs}px ${FN}`; while(x.measureText(tx).width>140*sc && fs>40){ fs-=2; x.font=`700 ${fs}px ${FN}`; } x.fillText(tx,cxp,oy+235*sc); }
+  if(stepsTotal()!=null){ x.textAlign="center"; x.fillStyle=C.fg; x.font=`700 30px ${FN}`; x.fillText(fmtNum(stepsTotal())+" 歩",cxp,oy+262*sc); }
+  // 出発・ゴール時刻
+  const cols=[["出発",fmtT(t0)],["ゴール",fmtT(t1)],["休憩・滞在",fmtMin(totalRest(t1))]];
+  cols.forEach((c,j)=>{ const cx=60+j*330+150; x.textAlign="center";
+    x.fillStyle=C.muted; x.font=`700 24px ${F}`; x.fillText(c[0],cx,1135);
+    x.fillStyle=C.fg; x.font=`700 54px ${FN}`; x.fillText(c[1],cx,1192); });
+  // 写真（歩いた順に30マス）
+  const cell=96, gap=6, gx=(W-(cell*10+gap*9))/2, gy=1225;
+  for(let k=0;k<N;k++){
+    const i=r[k], X=gx+(k%10)*(cell+gap), Y=gy+Math.floor(k/10)*(cell+gap);
+    x.save(); rr(X,Y,cell,cell,10); x.clip();
+    const ph=PH[i], im= ph ? await loadImg(ph.url) : null;
+    if(im){ const s2=Math.max(cell/im.naturalWidth, cell/im.naturalHeight), w=im.naturalWidth*s2, h=im.naturalHeight*s2;
+      x.drawImage(im, X+(cell-w)/2, Y+(cell-h)/2, w, h); }
+    else { x.fillStyle=C.track; x.fillRect(X,Y,cell,cell);
+      x.fillStyle=C.muted; x.textAlign="center"; const nm=ST[i][0];
+      if(nm.length>4){ const a=nm.slice(0,2), b2=nm.slice(2), fs=Math.min(17,Math.floor(84/b2.length)); x.font=`700 17px ${F}`; x.fillText(a,X+cell/2,Y+cell/2-4); x.font=`700 ${fs}px ${F}`; x.fillText(b2,X+cell/2,Y+cell/2+18); }
+      else { x.font=`700 18px ${F}`; x.fillText(nm,X+cell/2,Y+cell/2+6); } }
+    x.restore();
+  }
+  x.textAlign="right"; x.fillStyle=C.muted; x.font=`700 22px ${F}`; x.fillText("ぐるっと山手線",W-60,H-40);
+  const blob = await new Promise(res=>cv.toBlob(res,"image/jpeg",0.9));
+  if(btn){ btn.disabled=false; btn.textContent="完歩カードを作る"; }
+  if(!blob){ toast("画像を作れませんでした"); return; }
+  showCard(blob, d);
+}
+// ファイルを渡す：claude.ai では保存機能、PWA では iPhone の共有シート、PC ではダウンロード
+const canShareFile = f => { try{ return !!(navigator.canShare && navigator.canShare({files:[f]})); }catch(e){ return false; } };
+async function saveFile(name, blob, type){
+  if(DL){ try{ await DL.save({filename:name, data:blob}); return "ok"; }catch(e){ if(e && e.code==="declined") return "cancel"; } }
+  const f = new File([blob], name, {type});
+  if(canShareFile(f)){ try{ await navigator.share({files:[f]}); return "ok"; }catch(e){ if(e && e.name==="AbortError") return "cancel"; } }
+  if(!window.claude){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500); return "ok"; }
+  return "fail";
+}
+function showCard(blob, d){
+  const url=URL.createObjectURL(blob), v=document.getElementById("viewer");
+  const name=`yamanote-kanpo-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.jpg`;
+  v.innerHTML = `<div class="vbar"><span>完歩カード</span><button id="vX">閉じる</button></div>
+    <div class="vimg"><img src="${url}" alt="完歩カード"></div>
+    <div class="vrow"><button class="vsave" id="vS">画像を保存・共有</button><span class="hint">うまくいかないときは画像を長押しして「写真に追加」</span></div>`;
+  v.hidden=false;
+  v.querySelector("#vX").onclick=()=>{ v.hidden=true; v.innerHTML=""; URL.revokeObjectURL(url); };
+  const sv=v.querySelector("#vS"); if(sv) sv.onclick=async()=>{
+    const r=await saveFile(name, blob, "image/jpeg");
+    if(r==="fail") toast("保存できませんでした。画像を長押しして保存してください");
+  };
+}
+
+// ゴール演出
+// ゴール演出：約5秒だけ動いて完全に止まる（常時アニメーションはなし）
+function celebrate(){
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const t0=S.checks[0], t1=S.checks[N];
+  const ce=document.getElementById("cele");
+  ce.innerHTML=`<div class="box"><div class="s1">30駅 ぜんぶ歩いた！</div><div class="s2">山手線<br>一周達成</div><div class="s3">${fmtDur(t1-t0)}</div><div class="s4">タップで閉じる</div></div>`;
+  ce.hidden=false;
+  const close=()=>{ if(ce.hidden) return; ce.hidden=true; ce.innerHTML=""; clearTimeout(close.t); if(finished() && !S.mood[N]) openArrive(N); };
+  ce.onclick=close; close.t=setTimeout(close,6000);
+  svg.classList.add("svg-cele"); setTimeout(()=>svg.classList.remove("svg-cele"),3000);
+  if(reduce) return;
+  const cv=document.getElementById("fx"), ctx=cv.getContext("2d");
+  const dpr=Math.min(2,devicePixelRatio||1), W=innerWidth, H=innerHeight;
+  cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+"px"; cv.style.height=H+"px"; ctx.scale(dpr,dpr); cv.hidden=false;
+  const cols=["#86C232","#9ACD32","#3D6B10","#F2C230","#E5785B","#FFFFFF"];
+  const ps=[];
+  const add=(x,y,ang,spread,sp,n)=>{ for(let k=0;k<n;k++){ const a=ang+(Math.random()-.5)*spread, v=sp*(.55+Math.random()*.6);
+    ps.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,r:Math.random()*6,vr:(Math.random()-.5)*.4,s:5+Math.random()*6,c:cols[k%cols.length],life:1}); } };
+  // 左右の下から紙吹雪の大砲、続けて空に花火を3発
+  add(0,H,-Math.PI/3,.7,19,90); add(W,H,-Math.PI*2/3,.7,19,90);
+  const bursts=[[W*.3,H*.28,500],[W*.72,H*.22,1100],[W*.5,H*.36,1700]];
+  const start=performance.now(); let bi=0;
+  (function f(t){
+    const el=t-start;
+    while(bi<bursts.length && el>=bursts[bi][2]){ const [bx,by]=bursts[bi]; add(bx,by,0,Math.PI*2,8,60); bi++; }
+    ctx.clearRect(0,0,W,H);
+    for(const p of ps){ p.vy+=.32; p.vx*=.985; p.vy*=.985; p.x+=p.vx; p.y+=p.vy; p.r+=p.vr; if(el>3800) p.life-=.03;
+      if(p.y>H+20||p.life<=0) continue;
+      ctx.globalAlpha=Math.max(0,p.life); ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r); ctx.fillStyle=p.c; ctx.fillRect(-p.s/2,-p.s/4,p.s,p.s/2); ctx.restore(); }
+    ctx.globalAlpha=1;
+    if(el<5000) requestAnimationFrame(f); else { ctx.clearRect(0,0,W,H); cv.hidden=true; }
+  })(start);
+}
+
+// ---------- 記録の書き出し・読み込み（別の場所や端末へ引っ越すとき用。写真も含む） ----------
+const blobToData = b => new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.onerror=()=>r(null); fr.readAsDataURL(b); });
+document.getElementById("bkOut").onclick = async ()=>{
+  const photos=[];
+  try{ const st=await store("readonly"); if(st){ for(const rec of await req(st.getAll())){ const d=await blobToData(rec.blob); if(d) photos.push({st:rec.st ?? stOf(rec), ts:rec.ts, data:d}); } } }catch(e){}
+  const json=JSON.stringify({app:"gurutto-yamanote", version:1, exported:Date.now(), state:S, photos});
+  const d=new Date(), z=x=>String(x).padStart(2,"0");
+  const r=await saveFile(`gurutto-yamanote-${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}.json`, new Blob([json],{type:"application/json"}), "application/json");
+  if(r==="ok") toast(`記録を書き出しました（写真 ${photos.length}枚）`); else if(r==="fail") toast("書き出せませんでした");
+};
+const bkIn=document.getElementById("bkIn"), bkC=document.getElementById("bkConfirm");
+bkIn.onchange = async ()=>{
+  const f=bkIn.files[0]; bkIn.value=""; if(!f) return;
+  let data; try{ data=JSON.parse(await f.text()); }catch(e){ toast("このファイルは読み込めませんでした"); return; }
+  if(!data || data.app!=="gurutto-yamanote" || !data.state || !Array.isArray(data.state.checks)){ toast("ぐるっと山手線の記録ファイルではありません"); return; }
+  const n=data.state.checks.length, ph=(data.photos||[]).length;
+  bkC.innerHTML=`<div class="confirm"><span>${n?`${Math.min(n,N)}駅ぶんの記録`:"出発前の記録"}・写真${ph}枚で、今の記録を置き換えますか？</span><button class="yes" id="bkY">置き換える</button><button class="no" id="bkN">やめる</button></div>`;
+  bkC.querySelector("#bkN").onclick=()=>{ bkC.innerHTML=""; };
+  bkC.querySelector("#bkY").onclick=async ()=>{
+    bkC.innerHTML="";
+    await clearPhotos();
+    for(const p of data.photos||[]){ try{ const b=await (await fetch(p.data)).blob(); const st=await store("readwrite"); if(!st) break; const rec={st:p.st, ts:p.ts, blob:b}; rec.id=await req(st.add(rec)); addToMem(rec); }catch(e){} }
+    S = Object.assign({start:0, dir:"inner", checks:[], pauses:[], mood:{}, deps:{}}, data.state, {intro:true});
+    save(); syncTest(); applyLayout(); render(); toast("記録を読み込みました");
+  };
+};
+
+// ---------- はじめての人への案内（初回だけ表示。設定の「使い方を見る」でいつでも） ----------
+const INTRO = [
+  {h:"ぐるっと山手線へようこそ", p:"山手線の30駅を歩いて一周する日のための記録アプリです。着いた駅をたどりながら、ゴールの出発駅を目指します。",
+   art:`<svg viewBox="0 0 160 160" width="170" height="170" aria-hidden="true"><ellipse cx="80" cy="80" rx="52" ry="66" fill="none" stroke="var(--track)" stroke-width="10"/><path d="M132 80 A52 66 0 0 0 80 14" fill="none" stroke="var(--line)" stroke-width="10" stroke-linecap="round"/><circle cx="132" cy="80" r="9" fill="var(--surface)" stroke="var(--fg)" stroke-width="3"/><circle cx="80" cy="14" r="7" fill="var(--line)" stroke="var(--surface)" stroke-width="3"/><text x="80" y="88" text-anchor="middle" font-family="Barlow Semi Condensed, sans-serif" font-weight="700" font-size="26" fill="var(--ink)">30駅</text></svg>`},
+  {h:"出発駅と向きを決める", p:"路線図の駅をタップすると、その駅を出発駅にできます。内回り・外回りは右上の「設定」で選べます。",
+   art:`<div class="mini"><div class="chip s">路線図の駅をタップ</div><div class="arw">▼</div><div class="chip s">「ここを出発駅にする」</div><div class="arw">▼</div><div class="chip g">〇〇から出発する</div></div>`},
+  {h:"駅に着いたら「到着！」", p:"画面下のボタンを押すと、その駅でのやることが開きます。調子と駅名看板の写真を残してから「出発！」で次の駅へ。前の駅からの時間は、出発を押したときから数えます。",
+   art:`<div class="mini"><div class="chip g">〇〇に到着！</div><div class="arw">▼</div><div class="row2"><div class="chip s">いまの調子</div><div class="chip s">駅の写真</div></div><div class="arw">▼</div><div class="chip g">つぎの駅へ出発！</div></div>`},
+  {h:"休憩も、ふりかえりも", p:"歩いている途中は「休憩」で休んだ時間を残せます。路線図の真ん中の時間をタップすると、前の駅からの時間に切り替わります。ゴールすると、一周のふりかえりと完歩カードが作れます。",
+   art:`<div class="mini"><div class="row2"><div class="chip s">休憩</div><div class="chip s">時間をタップ ⇄</div></div><div class="arw">▼</div><div class="chip g">ふりかえり・完歩カード</div></div>`}
+];
+function showIntro(i=0){
+  const box=document.getElementById("intro"), it=INTRO[i], last=i===INTRO.length-1;
+  box.innerHTML=`<button class="skip" id="inSkip">${last?"":"スキップ"}</button>
+    <div class="slide"><div class="art">${it.art}</div><h2>${it.h}</h2><p>${it.p}</p></div>
+    <div class="nav"><div class="dots">${INTRO.map((_,k)=>`<i class="${k===i?"on":""}"></i>`).join("")}</div>
+    <button class="go" id="inNext">${last?"はじめる":"次へ"}</button></div>`;
+  box.hidden=false; document.body.style.overflow="hidden";
+  const done=()=>{ box.hidden=true; box.innerHTML=""; document.body.style.overflow=""; S.intro=true; save(); };
+  box.querySelector("#inNext").onclick=()=> last ? done() : showIntro(i+1);
+  box.querySelector("#inSkip").onclick=done;
+}
+document.getElementById("showIntro").onclick=()=>showIntro(0);
+
+// テストモード（画面）
+const tmChk=document.getElementById("tmChk"), testbar=document.getElementById("testbar");
+function syncTest(){
+  tmChk.checked=!!S.test; testbar.hidden=!S.test;
+  tmChk.disabled = !!S.test && started() && (S.tOff||0)>0; // 早送り後の記録が残っている間は解除しない
+  const m=Math.round((S.tOff||0)/60000); document.getElementById("tOff").textContent=Math.floor(m/60)+":"+String(m%60).padStart(2,"0");
+}
+tmChk.onchange=()=>{ S.test=tmChk.checked; if(!S.test) S.tOff=0; save(); syncTest(); render(); };
+testbar.querySelectorAll("button[data-add]").forEach(b=>b.onclick=()=>{ S.tOff=(S.tOff||0)+(+b.dataset.add)*60000; save(); syncTest(); render(); });
+// ゴールまでスキップ：残りの区間を、それらしい所要時間・滞在・休憩・調子つきで自動で記録する
+const tGoal=document.getElementById("tGoal");
+tGoal.onclick=()=>{
+  if(finished()) return;
+  if(!tGoal.dataset.arm){ tGoal.dataset.arm="1"; tGoal.textContent="もう一度押すと実行"; setTimeout(()=>{ delete tGoal.dataset.arm; tGoal.textContent="ゴールまで"; },3000); return; }
+  delete tGoal.dataset.arm; tGoal.textContent="ゴールまで";
+  const rnd=(a,b)=>Math.round((a+Math.random()*(b-a))*60000);
+  const ids=MOODS.map(m=>m.id); let t=now();
+  if(paused()) S.pauses[S.pauses.length-1].e=t;
+  if(!started()){ S.checks=[t]; S.deps={0:t}; }
+  while(!finished()){
+    const n=S.checks.length;
+    if(atStation()){ t+=rnd(1,6); S.deps[n-1]=t; continue; }
+    const dep=t; t+=rnd(9,26);
+    if(Math.random()<0.15){ const ps=dep+rnd(3,8); const pe=ps+rnd(5,15); S.pauses.push({s:ps,e:pe}); t+=pe-ps; }
+    S.checks.push(t);
+    if(!S.mood[n]){ const lv = n<10 ? ids.slice(0,4) : n<20 ? ids.slice(2,6) : ids.slice(3); S.mood[n]=lv[Math.floor(Math.random()*lv.length)]; }
+  }
+  S.tOff=(S.tOff||0)+(t-now());
+  save(); closeSheet(); closeArrive(); syncTest(); render(); celebrate();
+};
+syncTest();
+
+render();
+loadPhotos();
+if(!S.intro && !started()) showIntro(0);
+try{ document.fonts.ready.then(()=>{ document.querySelectorAll('[data-fit-for]').forEach(e=>{ delete e.dataset.fitFor; }); placeFlag(); render(); }); }catch(e){}
+</script>
+
+<script>
+// オフラインで起動できるようにする（GitHub Pages など https で公開したときに有効）
+if("serviceWorker" in navigator && location.protocol==="https:"){
+  window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+}
+</script>
+</body>
+</html>
